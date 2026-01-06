@@ -20,8 +20,8 @@ export default function ForgotPasswordPage() {
         setLoading(true);
 
         try {
-            // 建構 Redirect URL：指向 /#/reset-password
-            const redirectUrl = `${window.location.origin}/#/reset-password`;
+            // 建構 Redirect URL：指向首頁 (App.tsx 會自動攔截並導向重設頁)
+            const redirectUrl = window.location.origin;
 
             const supabase = getSupabaseClient();
             const { error } = await supabase.auth.resetPasswordForEmail(email, {

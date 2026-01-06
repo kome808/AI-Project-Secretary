@@ -12,6 +12,7 @@ import SettingsPage from './settings/SettingsPage';
 import { WorkListPage } from './work/WorkListPage';
 import { WorkDetailPage } from './work/WorkDetailPage';
 import { MapViewPage } from './work/MapViewPage';
+import { getSupabaseClient } from '../lib/supabase/client';
 import { needsMigration, migrateAllItemsStatus } from '../lib/storage/statusMigration';
 import '../lib/permissions/devTools'; // Load development permission tools
 import { DevUserSwitcher } from '@/lib/permissions/devTools';
@@ -76,8 +77,18 @@ export default function App() {
       console.log('✅ 已有用戶登入:', JSON.parse(currentUser));
     }
 
-    // 3. Mock data initialization 已移到 ProjectContext 中處理
-    // 不在此處呼叫 getStorageClient()，避免創建多個 adapter 實例
+    // 3. 監聽 Auth 狀態 (處理重設密碼跳轉)
+    const supabase = getSupabaseClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('🔄 偵測到密碼重設請求，正在跳轉...');
+        router.navigate('/reset-password');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
