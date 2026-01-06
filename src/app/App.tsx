@@ -16,7 +16,18 @@ import { needsMigration, migrateAllItemsStatus } from '../lib/storage/statusMigr
 import '../lib/permissions/devTools'; // Load development permission tools
 import { DevUserSwitcher } from '@/lib/permissions/devTools';
 
+import LoginPage from './auth/LoginPage';
+import ResetPasswordPage from './auth/ResetPasswordPage';
+
 const router = createHashRouter([
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
+  },
   {
     path: '/',
     element: <AppLayout />,
