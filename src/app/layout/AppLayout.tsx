@@ -1,10 +1,55 @@
-import React from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { CurrentUserBadge } from '@/features/project/components/CurrentUserBadge';
 import { Toaster } from 'sonner';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { Loader2 } from 'lucide-react';
 
 export function AppLayout() {
+  const navigate = useNavigate();
+  const [isChecking, setIsChecking] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session) {
+          // 未登入，導向登入頁
+          navigate('/login', { replace: true });
+        } else {
+          setIsAuthenticated(true);
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+        navigate('/login', { replace: true });
+      } finally {
+        setIsChecking(false);
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  // 驗證中顯示載入畫面
+  if (isChecking) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">驗證中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 未通過驗證不渲染內容（會被導向登入頁）
+  if (!isAuthenticated) {
+    return null;
+  }
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       {/* Sidebar - Always visible */}
