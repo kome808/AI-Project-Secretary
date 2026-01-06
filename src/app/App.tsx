@@ -18,11 +18,16 @@ import { DevUserSwitcher } from '@/lib/permissions/devTools';
 
 import LoginPage from './auth/LoginPage';
 import ResetPasswordPage from './auth/ResetPasswordPage';
+import ForgotPasswordPage from './auth/ForgotPasswordPage';
 
 const router = createHashRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />,
   },
   {
     path: '/reset-password',

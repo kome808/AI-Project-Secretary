@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,6 +113,11 @@ export default function LoginPage() {
                                         onChange={(e) => setPassword(e.target.value)}
                                         required
                                     />
+                                </div>
+                                <div className="flex justify-end">
+                                    <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+                                        忘記密碼？
+                                    </Link>
                                 </div>
                             </div>
                         </CardContent>
