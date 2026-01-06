@@ -1,0 +1,382 @@
+-- ============================================
+-- 專案管理相關資料表 - Supabase Schema
+-- ============================================
+-- 建立日期：2024-12-23
+-- 用途：儲存專案、成員、任務、文件等資料
+-- Schema 名稱：aiproject
+-- ============================================
+
+-- ============================================
+-- 1. Projects 表（專案）
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS aiproject.projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'pending_deletion', 'deleted')),
+    pm_id TEXT, -- Project Manager ID（暫時用 TEXT，未來可改為 UUID 關聯到 users 表）
+    deleted_at TIMESTAMPTZ,
+    purge_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ
+);
+
+-- 索引
+CREATE INDEX IF NOT EXISTS idx_projects_status ON aiproject.projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_created_at ON aiproject.projects(created_at DESC);
+
+-- 更新時間自動觸發器
+CREATE OR REPLACE FUNCTION aiproject.update_projects_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_projects_updated_at
+BEFORE UPDATE ON aiproject.projects
+FOR EACH ROW
+EXECUTE FUNCTION aiproject.update_projects_updated_at();
+
+-- 註解
+COMMENT ON TABLE aiproject.projects IS '專案主表';
+COMMENT ON COLUMN aiproject.projects.status IS '專案狀態：active(啟用)/archived(封存)/pending_deletion(待刪除)/deleted(已刪除)';
+COMMENT ON COLUMN aiproject.projects.pm_id IS '專案經理 ID';
+COMMENT ON COLUMN aiproject.projects.deleted_at IS '標記刪除時間';
+COMMENT ON COLUMN aiproject.projects.purge_at IS '永久刪除時間（deleted_at + 30 天）';
+
+-- ============================================
+-- 2. Members 表（專案成員）
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS aiproject.members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES aiproject.projects(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('client', 'pm', 'designer', 'engineer', 'other')),
+    role_display_name TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('invited', 'active', 'disabled')),
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    
+    -- 確保同一專案中 email 唯一
+    CONSTRAINT unique_project_member_email UNIQUE (project_id, email)
+);
+
+-- 索引
+CREATE INDEX IF NOT EXISTS idx_members_project_id ON aiproject.members(project_id);
+CREATE INDEX IF NOT EXISTS idx_members_email ON aiproject.members(email);
+CREATE INDEX IF NOT EXISTS idx_members_status ON aiproject.members(status);
+
+-- 註解
+COMMENT ON TABLE aiproject.members IS '專案成員表';
+COMMENT ON COLUMN aiproject.members.role IS '成員角色：client(客戶)/pm(專案經理)/designer(設計師)/engineer(工程師)/other(其他)';
+COMMENT ON COLUMN aiproject.members.status IS '成員狀態：invited(已邀請)/active(啟用)/disabled(停用)';
+
+-- ============================================
+-- 3. Artifacts 表（文件/證據）
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS aiproject.artifacts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES aiproject.projects(id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL, -- MIME type
+    original_content TEXT NOT NULL,
+    masked_content TEXT,
+    archived BOOLEAN DEFAULT false,
+    meta JSONB, -- 彈性欄位：{ channel, summary, source_info, uploader_id, file_name, file_size, file_type }
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 索引
+CREATE INDEX IF NOT EXISTS idx_artifacts_project_id ON aiproject.artifacts(project_id);
+CREATE INDEX IF NOT EXISTS idx_artifacts_created_at ON aiproject.artifacts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_artifacts_archived ON aiproject.artifacts(archived);
+CREATE INDEX IF NOT EXISTS idx_artifacts_content_type ON aiproject.artifacts(content_type);
+
+-- 註解
+COMMENT ON TABLE aiproject.artifacts IS '文件/證據表（支援文字、檔案、對話記錄等）';
+COMMENT ON COLUMN aiproject.artifacts.content_type IS 'MIME type（例如：text/plain, text/conversation, text/uri-list, application/pdf）';
+COMMENT ON COLUMN aiproject.artifacts.original_content IS '原始內容（建立後不可修改）';
+COMMENT ON COLUMN aiproject.artifacts.masked_content IS '遮罩敏感資訊後的內容';
+COMMENT ON COLUMN aiproject.artifacts.meta IS 'JSON 格式的 metadata（channel, summary, source_info, uploader_id 等）';
+
+-- ============================================
+-- 4. Items 表（任務/需求項目）
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS aiproject.items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES aiproject.projects(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('general', 'pending', 'cr', 'decision')),
+    status TEXT NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started', 'in_progress', 'blocked', 'awaiting_response', 'completed')),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    source_artifact_id UUID REFERENCES aiproject.artifacts(id) ON DELETE SET NULL,
+    assignee_id TEXT, -- 暫時用 TEXT，未來可改為 UUID 關聯到 members 表
+    work_package_id UUID, -- 關聯到 WorkPackage（尚未建立）
+    parent_id UUID REFERENCES aiproject.items(id) ON DELETE SET NULL, -- 樹狀結構
+    due_date TIMESTAMPTZ,
+    priority TEXT CHECK (priority IN ('low', 'medium', 'high')),
+    notes TEXT, -- 備註內容
+    notes_updated_at TIMESTAMPTZ,
+    notes_updated_by TEXT,
+    meta JSONB, -- 彈性欄位（tags, confidence, pending target, rule scope 等）
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 索引
+CREATE INDEX IF NOT EXISTS idx_items_project_id ON aiproject.items(project_id);
+CREATE INDEX IF NOT EXISTS idx_items_type ON aiproject.items(type);
+CREATE INDEX IF NOT EXISTS idx_items_status ON aiproject.items(status);
+CREATE INDEX IF NOT EXISTS idx_items_assignee_id ON aiproject.items(assignee_id);
+CREATE INDEX IF NOT EXISTS idx_items_work_package_id ON aiproject.items(work_package_id);
+CREATE INDEX IF NOT EXISTS idx_items_parent_id ON aiproject.items(parent_id);
+CREATE INDEX IF NOT EXISTS idx_items_due_date ON aiproject.items(due_date);
+CREATE INDEX IF NOT EXISTS idx_items_created_at ON aiproject.items(created_at DESC);
+
+-- 更新時間自動觸發器
+CREATE OR REPLACE FUNCTION aiproject.update_items_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_items_updated_at
+BEFORE UPDATE ON aiproject.items
+FOR EACH ROW
+EXECUTE FUNCTION aiproject.update_items_updated_at();
+
+-- 註解
+COMMENT ON TABLE aiproject.items IS '任務/需求項目表';
+COMMENT ON COLUMN aiproject.items.type IS '項目類型：general(一般)/pending(待回覆)/cr(需求變更)/decision(決策)';
+COMMENT ON COLUMN aiproject.items.status IS '項目狀態：not_started(未開始)/in_progress(進行中)/blocked(受阻)/awaiting_response(等待回覆)/completed(已完成)';
+COMMENT ON COLUMN aiproject.items.parent_id IS '父項目 ID（用於樹狀結構）';
+COMMENT ON COLUMN aiproject.items.meta IS 'JSON 格式的彈性欄位（tags, confidence, pending_meta, decision_meta 等）';
+
+-- ============================================
+-- 5. Artifact-Item 關聯表（多對多）
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS aiproject.item_artifacts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    item_id UUID NOT NULL REFERENCES aiproject.items(id) ON DELETE CASCADE,
+    artifact_id UUID NOT NULL REFERENCES aiproject.artifacts(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    
+    -- 確保同一個 item 不會重複關聯同一個 artifact
+    CONSTRAINT unique_item_artifact UNIQUE (item_id, artifact_id)
+);
+
+-- 索引
+CREATE INDEX IF NOT EXISTS idx_item_artifacts_item_id ON aiproject.item_artifacts(item_id);
+CREATE INDEX IF NOT EXISTS idx_item_artifacts_artifact_id ON aiproject.item_artifacts(artifact_id);
+
+-- 註解
+COMMENT ON TABLE aiproject.item_artifacts IS 'Item 與 Artifact 的多對多關聯表';
+
+-- ============================================
+-- Row Level Security (RLS) 政策
+-- ============================================
+
+-- 1. Projects 表 RLS
+ALTER TABLE aiproject.projects ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anon users to read projects"
+ON aiproject.projects FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Allow anon users to insert projects"
+ON aiproject.projects FOR INSERT TO anon WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to update projects"
+ON aiproject.projects FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to delete projects"
+ON aiproject.projects FOR DELETE TO anon USING (true);
+
+CREATE POLICY "Allow authenticated users to read projects"
+ON aiproject.projects FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Allow authenticated users to insert projects"
+ON aiproject.projects FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to update projects"
+ON aiproject.projects FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to delete projects"
+ON aiproject.projects FOR DELETE TO authenticated USING (true);
+
+-- 2. Members 表 RLS
+ALTER TABLE aiproject.members ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anon users to read members"
+ON aiproject.members FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Allow anon users to insert members"
+ON aiproject.members FOR INSERT TO anon WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to update members"
+ON aiproject.members FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to delete members"
+ON aiproject.members FOR DELETE TO anon USING (true);
+
+CREATE POLICY "Allow authenticated users to read members"
+ON aiproject.members FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Allow authenticated users to insert members"
+ON aiproject.members FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to update members"
+ON aiproject.members FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to delete members"
+ON aiproject.members FOR DELETE TO authenticated USING (true);
+
+-- 3. Artifacts 表 RLS
+ALTER TABLE aiproject.artifacts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anon users to read artifacts"
+ON aiproject.artifacts FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Allow anon users to insert artifacts"
+ON aiproject.artifacts FOR INSERT TO anon WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to update artifacts"
+ON aiproject.artifacts FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to delete artifacts"
+ON aiproject.artifacts FOR DELETE TO anon USING (true);
+
+CREATE POLICY "Allow authenticated users to read artifacts"
+ON aiproject.artifacts FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Allow authenticated users to insert artifacts"
+ON aiproject.artifacts FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to update artifacts"
+ON aiproject.artifacts FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to delete artifacts"
+ON aiproject.artifacts FOR DELETE TO authenticated USING (true);
+
+-- 4. Items 表 RLS
+ALTER TABLE aiproject.items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anon users to read items"
+ON aiproject.items FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Allow anon users to insert items"
+ON aiproject.items FOR INSERT TO anon WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to update items"
+ON aiproject.items FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to delete items"
+ON aiproject.items FOR DELETE TO anon USING (true);
+
+CREATE POLICY "Allow authenticated users to read items"
+ON aiproject.items FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Allow authenticated users to insert items"
+ON aiproject.items FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to update items"
+ON aiproject.items FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to delete items"
+ON aiproject.items FOR DELETE TO authenticated USING (true);
+
+-- 5. Item-Artifact 關聯表 RLS
+ALTER TABLE aiproject.item_artifacts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anon users to read item_artifacts"
+ON aiproject.item_artifacts FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Allow anon users to insert item_artifacts"
+ON aiproject.item_artifacts FOR INSERT TO anon WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to update item_artifacts"
+ON aiproject.item_artifacts FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow anon users to delete item_artifacts"
+ON aiproject.item_artifacts FOR DELETE TO anon USING (true);
+
+CREATE POLICY "Allow authenticated users to read item_artifacts"
+ON aiproject.item_artifacts FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Allow authenticated users to insert item_artifacts"
+ON aiproject.item_artifacts FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to update item_artifacts"
+ON aiproject.item_artifacts FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to delete item_artifacts"
+ON aiproject.item_artifacts FOR DELETE TO authenticated USING (true);
+
+-- ============================================
+-- 完成訊息
+-- ============================================
+
+DO $$
+BEGIN
+    RAISE NOTICE '═══════════════════════════════════════════';
+    RAISE NOTICE '✅ 專案管理資料表建立完成！';
+    RAISE NOTICE '═══════════════════════════════════════════';
+    RAISE NOTICE '已建立的資料表：';
+    RAISE NOTICE '  - aiproject.projects（專案）';
+    RAISE NOTICE '  - aiproject.members（專案成員）';
+    RAISE NOTICE '  - aiproject.artifacts（文件/證據）';
+    RAISE NOTICE '  - aiproject.items（任務/需求項目）';
+    RAISE NOTICE '  - aiproject.item_artifacts（Item-Artifact 關聯）';
+    RAISE NOTICE '═══════════════════════════════════════════';
+    RAISE NOTICE '已建立的功能：';
+    RAISE NOTICE '  - 自動更新時間觸發器（projects, items）';
+    RAISE NOTICE '  - RLS 權限政策（全部表格）';
+    RAISE NOTICE '  - 外鍵約束（CASCADE 刪除）';
+    RAISE NOTICE '  - 唯一性約束（member email, item-artifact）';
+    RAISE NOTICE '═══════════════════════════════════════════';
+    RAISE NOTICE '下一步：';
+    RAISE NOTICE '  1. 執行驗證查詢：SELECT * FROM aiproject.projects;';
+    RAISE NOTICE '  2. 重新整理應用程式';
+    RAISE NOTICE '  3. 使用「載入模擬資料」功能建立測試資料';
+    RAISE NOTICE '═══════════════════════════════════════════';
+END $$;
+
+-- ============================================
+-- 🔍 驗證指令（可選）
+-- ============================================
+
+-- 1. 確認所有表格已建立
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'aiproject'
+ORDER BY table_name;
+
+-- 2. 確認 RLS 已啟用
+SELECT schemaname, tablename, rowsecurity 
+FROM pg_tables 
+WHERE schemaname = 'aiproject'
+ORDER BY tablename;
+
+-- 3. 確認外鍵約束
+SELECT
+    tc.table_name, 
+    kcu.column_name, 
+    ccu.table_name AS foreign_table_name,
+    ccu.column_name AS foreign_column_name 
+FROM information_schema.table_constraints AS tc 
+JOIN information_schema.key_column_usage AS kcu
+  ON tc.constraint_name = kcu.constraint_name
+  AND tc.table_schema = kcu.table_schema
+JOIN information_schema.constraint_column_usage AS ccu
+  ON ccu.constraint_name = tc.constraint_name
+  AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY' 
+  AND tc.table_schema = 'aiproject'
+ORDER BY tc.table_name;
