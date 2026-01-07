@@ -871,6 +871,24 @@ export class SupabaseAdapter implements StorageAdapter {
   async deleteMember(id: string): Promise<StorageResponse<void>> {
     try {
       const schemaName = getSchemaName();
+
+      // 1. 先取得該成員的 email 和 user_id (如果有)
+      const { data: memberData, error: fetchError } = await this.supabase
+        .schema(schemaName)
+        .from('members')
+        .select('email, user_id')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Supabase fetchMember error:', fetchError);
+        return { data: null, error: new Error(fetchError.message) };
+      }
+
+      const memberEmail = memberData?.email;
+      const memberUserId = memberData?.user_id;
+
+      // 2. 刪除 members 記錄
       const { error } = await this.supabase
         .schema(schemaName)
         .from('members')
@@ -880,6 +898,31 @@ export class SupabaseAdapter implements StorageAdapter {
       if (error) {
         console.error('Supabase deleteMember error:', error);
         return { data: null, error: new Error(error.message) };
+      }
+
+      // 3. 檢查該 email 在其他專案是否還有記錄
+      if (memberEmail) {
+        const { data: remainingRecords, error: checkError } = await this.supabase
+          .schema(schemaName)
+          .from('members')
+          .select('id')
+          .eq('email', memberEmail);
+
+        if (checkError) {
+          console.warn('Check remaining projects error:', checkError);
+          // 不阻止刪除流程
+        } else if (!remainingRecords || remainingRecords.length === 0) {
+          // 4. 若無其他專案，呼叫 Edge Function 刪除 Auth 使用者
+          console.log(`📤 使用者 ${memberEmail} 已無任何專案，嘗試刪除 Auth 帳號...`);
+
+          if (memberUserId) {
+            await this.deleteAuthUser(memberUserId, memberEmail);
+          } else {
+            console.warn('無法刪除 Auth 使用者：缺少 user_id');
+          }
+        } else {
+          console.log(`✅ 使用者 ${memberEmail} 仍有 ${remainingRecords.length} 個專案`);
+        }
       }
 
       return { data: undefined, error: null };
@@ -893,6 +936,74 @@ export class SupabaseAdapter implements StorageAdapter {
     // Alias for deleteMember
     return this.deleteMember(id);
   }
+
+  /**
+   * 根據 email 查詢該使用者在所有專案的成員記錄
+   */
+  async getMembersByEmail(email: string): Promise<StorageResponse<Member[]>> {
+    try {
+      const schemaName = getSchemaName();
+      const { data, error } = await this.supabase
+        .schema(schemaName)
+        .from('members')
+        .select('*')
+        .eq('email', email);
+
+      if (error) {
+        console.error('Supabase getMembersByEmail error:', error);
+        return { data: null, error: new Error(error.message) };
+      }
+
+      return { data: data || [], error: null };
+    } catch (err) {
+      console.error('getMembersByEmail exception:', err);
+      return { data: null, error: err as Error };
+    }
+  }
+
+  /**
+   * 呼叫 Edge Function 刪除 Supabase Auth 使用者
+   * 需要後端 Service Role Key 權限
+   */
+  private async deleteAuthUser(userId: string, email: string): Promise<void> {
+    try {
+      const supabaseUrl = localStorage.getItem('supabase_url');
+      const publicAnonKey = localStorage.getItem('supabase_anon_key');
+
+      if (!supabaseUrl || !publicAnonKey) {
+        console.warn('Missing Supabase credentials for delete-user');
+        return;
+      }
+
+      const isLocal = supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1');
+      const functionName = 'server';
+      const routePath = '/delete-user';
+
+      const baseUrl = supabaseUrl.replace(/\/$/, '');
+      const functionUrl = isLocal
+        ? `${baseUrl}/functions/v1/make-server-4df51a95${routePath}`
+        : `${baseUrl}/functions/v1/${functionName}${routePath}`;
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${publicAnonKey}`
+        },
+        body: JSON.stringify({ userId, email })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to delete Auth user:', errorData);
+      } else {
+        console.log(`✅ Auth 使用者已刪除: ${email}`);
+      }
+    } catch (e) {
+      console.error('Exception deleting Auth user:', e);
+    }
+  }
+
 
   async getArtifacts(projectId: string): Promise<StorageResponse<Artifact[]>> {
     try {

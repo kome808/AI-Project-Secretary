@@ -20,6 +20,8 @@ import { DevUserSwitcher } from '@/lib/permissions/devTools';
 import LoginPage from './auth/LoginPage';
 import ResetPasswordPage from './auth/ResetPasswordPage';
 import ForgotPasswordPage from './auth/ForgotPasswordPage';
+import AuthErrorPage from './auth/AuthErrorPage';
+import NoProjectPage from './auth/NoProjectPage';
 
 const router = createHashRouter([
   {
@@ -33,6 +35,10 @@ const router = createHashRouter([
   {
     path: '/reset-password',
     element: <ResetPasswordPage />,
+  },
+  {
+    path: '/no-project',
+    element: <NoProjectPage />,
   },
   {
     path: '/',
@@ -49,6 +55,10 @@ const router = createHashRouter([
       { path: 'sources', element: <SourcesPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
+  },
+  {
+    path: '*',
+    element: <AuthErrorPage />,
   },
 ]);
 

@@ -64,6 +64,62 @@ app.post("*/invite", async (c) => {
   }
 });
 
+// Delete User endpoint - 刪除 Supabase Auth 使用者
+// Handle both /delete-user and /server/delete-user
+app.post("*/delete-user", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { userId, email } = body;
+
+    if (!userId) {
+      return c.json({ error: 'Missing userId' }, 400);
+    }
+
+    // Initialize Supabase Admin Client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing Supabase keys in environment variables');
+      return c.json({ error: 'Server configuration error' }, 500);
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // 安全檢查：確認該使用者在 members 表中沒有任何記錄
+    // 這是為了防止誤刪還在使用中的帳號
+    const { data: memberCheck, error: checkError } = await supabaseAdmin
+      .schema('aiproject')
+      .from('members')
+      .select('id')
+      .eq('email', email);
+
+    if (checkError) {
+      console.error('Member check error:', checkError);
+      // 繼續執行，因為可能是 schema 不存在等問題
+    }
+
+    if (memberCheck && memberCheck.length > 0) {
+      console.log(`安全檢查失敗：使用者 ${email} 仍有 ${memberCheck.length} 個專案成員記錄`);
+      return c.json({ error: 'User still has project memberships' }, 400);
+    }
+
+    // 刪除 Auth 使用者
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+    if (error) {
+      console.error('Supabase Auth Delete Error:', error);
+      return c.json({ error: error.message }, 400);
+    }
+
+    console.log(`✅ 成功刪除 Auth 使用者: ${email} (${userId})`);
+    return c.json({ success: true, message: `User ${email} deleted` });
+  } catch (error) {
+    console.error('Delete User Proxy error:', error);
+    return c.json({ error: error.message || 'Internal server error' }, 500);
+  }
+});
+
 // AI Proxy endpoint - 代理 OpenAI API 呼叫
 app.post("/make-server-4df51a95/ai/chat", async (c) => {
   try {

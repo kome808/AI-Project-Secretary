@@ -33,6 +33,25 @@ export default function LoginPage() {
                 const user = data.session.user;
                 const userEmail = user.email || '';
 
+                // 檢查使用者是否有加入任何專案
+                const { data: memberRecords, error: memberError } = await supabase
+                    .schema('aiproject')
+                    .from('members')
+                    .select('id, project_id')
+                    .eq('email', userEmail);
+
+                if (memberError) {
+                    console.error('Check projects error:', memberError);
+                    // 繼續執行，不因查詢失敗而阻止登入
+                }
+
+                // 若沒有任何專案，跳轉到「無專案」頁面
+                if (!memberRecords || memberRecords.length === 0) {
+                    toast.info('您尚未加入任何專案');
+                    navigate('/no-project');
+                    return;
+                }
+
                 // 白名單：指定 Email 為管理員
                 const isAdmin = userEmail === 'kome808@gmail.com';
                 const role = isAdmin ? 'admin' : 'member';
@@ -45,7 +64,8 @@ export default function LoginPage() {
                     role: role,
                     avatar: user.user_metadata?.avatar_url || 'https://github.com/shadcn.png',
                     status: 'active',
-                    joined_at: new Date().toISOString()
+                    joined_at: new Date().toISOString(),
+                    projectIds: memberRecords.map(m => m.project_id) // 記錄所屬專案
                 };
 
                 // 1. 持久化儲存 (讓 App 重整後能讀取)
