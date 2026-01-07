@@ -27,6 +27,8 @@ import { TaskSuggestion } from '@/features/ai/components/TaskPreviewCard';
 
 // Legacy Util for task planning confirmation
 import { getStorageClient } from '@/lib/storage';
+import { HelpTooltip } from '@/components/common/HelpTooltip';
+import { tooltips } from '@/lib/help/helpContent';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -296,6 +298,7 @@ export function DashboardPage() {
             <h3 className="flex items-center gap-2 text-lg font-semibold text-blue-700">
               <Sparkles className="w-5 h-5" />
               AI 專案秘書
+              <HelpTooltip content={tooltips.dashboard.aiInput} side="right" />
             </h3>
             <p className="text-sm text-gray-500">
               貼上對話、會議記錄，或用自然語言提問，我會幫你整理成任務與建議

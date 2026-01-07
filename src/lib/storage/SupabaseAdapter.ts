@@ -872,11 +872,11 @@ export class SupabaseAdapter implements StorageAdapter {
     try {
       const schemaName = getSchemaName();
 
-      // 1. 先取得該成員的 email 和 user_id (如果有)
+      // 1. 先取得該成員的 email（user_id 可能不存在，所以只查 email）
       const { data: memberData, error: fetchError } = await this.supabase
         .schema(schemaName)
         .from('members')
-        .select('email, user_id')
+        .select('email')
         .eq('id', id)
         .maybeSingle();
 
@@ -886,7 +886,6 @@ export class SupabaseAdapter implements StorageAdapter {
       }
 
       const memberEmail = memberData?.email;
-      const memberUserId = memberData?.user_id;
 
       // 2. 刪除 members 記錄
       const { error } = await this.supabase
@@ -914,12 +913,8 @@ export class SupabaseAdapter implements StorageAdapter {
         } else if (!remainingRecords || remainingRecords.length === 0) {
           // 4. 若無其他專案，呼叫 Edge Function 刪除 Auth 使用者
           console.log(`📤 使用者 ${memberEmail} 已無任何專案，嘗試刪除 Auth 帳號...`);
-
-          if (memberUserId) {
-            await this.deleteAuthUser(memberUserId, memberEmail);
-          } else {
-            console.warn('無法刪除 Auth 使用者：缺少 user_id');
-          }
+          // 使用 email 刪除（Edge Function 會根據 email 查找 Auth User）
+          await this.deleteAuthUserByEmail(memberEmail);
         } else {
           console.log(`✅ 使用者 ${memberEmail} 仍有 ${remainingRecords.length} 個專案`);
         }
@@ -1004,6 +999,48 @@ export class SupabaseAdapter implements StorageAdapter {
     }
   }
 
+  /**
+   * 呼叫 Edge Function 刪除 Supabase Auth 使用者（透過 email 查找）
+   * 後端會根據 email 查找 Auth User ID 再刪除
+   */
+  private async deleteAuthUserByEmail(email: string): Promise<void> {
+    try {
+      const supabaseUrl = localStorage.getItem('supabase_url');
+      const publicAnonKey = localStorage.getItem('supabase_anon_key');
+
+      if (!supabaseUrl || !publicAnonKey) {
+        console.warn('Missing Supabase credentials for delete-user');
+        return;
+      }
+
+      const isLocal = supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1');
+      const functionName = 'server';
+      const routePath = '/delete-user-by-email';
+
+      const baseUrl = supabaseUrl.replace(/\/$/, '');
+      const functionUrl = isLocal
+        ? `${baseUrl}/functions/v1/make-server-4df51a95${routePath}`
+        : `${baseUrl}/functions/v1/${functionName}${routePath}`;
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${publicAnonKey}`
+        },
+        body: JSON.stringify({ email })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to delete Auth user by email:', errorData);
+      } else {
+        console.log(`✅ Auth 使用者已刪除（by email）: ${email}`);
+      }
+    } catch (e) {
+      console.error('Exception deleting Auth user by email:', e);
+    }
+  }
 
   async getArtifacts(projectId: string): Promise<StorageResponse<Artifact[]>> {
     try {

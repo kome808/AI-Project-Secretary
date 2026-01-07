@@ -120,6 +120,74 @@ app.post("*/delete-user", async (c) => {
   }
 });
 
+// Delete User by Email endpoint - 透過 email 查找並刪除 Supabase Auth 使用者
+app.post("*/delete-user-by-email", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email } = body;
+
+    if (!email) {
+      return c.json({ error: 'Missing email' }, 400);
+    }
+
+    // Initialize Supabase Admin Client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing Supabase keys in environment variables');
+      return c.json({ error: 'Server configuration error' }, 500);
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // 安全檢查：確認該使用者在 members 表中沒有任何記錄
+    const { data: memberCheck, error: checkError } = await supabaseAdmin
+      .schema('aiproject')
+      .from('members')
+      .select('id')
+      .eq('email', email);
+
+    if (checkError) {
+      console.error('Member check error:', checkError);
+    }
+
+    if (memberCheck && memberCheck.length > 0) {
+      console.log(`安全檢查失敗：使用者 ${email} 仍有 ${memberCheck.length} 個專案成員記錄`);
+      return c.json({ error: 'User still has project memberships' }, 400);
+    }
+
+    // 透過 email 查找 Auth 使用者
+    const { data: usersData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+
+    if (listError) {
+      console.error('List users error:', listError);
+      return c.json({ error: listError.message }, 400);
+    }
+
+    const targetUser = usersData?.users?.find(u => u.email === email);
+
+    if (!targetUser) {
+      console.log(`找不到 email 為 ${email} 的 Auth 使用者`);
+      return c.json({ error: 'User not found in auth.users' }, 404);
+    }
+
+    // 刪除 Auth 使用者
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(targetUser.id);
+
+    if (error) {
+      console.error('Supabase Auth Delete Error:', error);
+      return c.json({ error: error.message }, 400);
+    }
+
+    console.log(`✅ 成功刪除 Auth 使用者（by email）: ${email} (${targetUser.id})`);
+    return c.json({ success: true, message: `User ${email} deleted` });
+  } catch (error) {
+    console.error('Delete User By Email Proxy error:', error);
+    return c.json({ error: error.message || 'Internal server error' }, 500);
+  }
+});
+
 // AI Proxy endpoint - 代理 OpenAI API 呼叫
 app.post("/make-server-4df51a95/ai/chat", async (c) => {
   try {
