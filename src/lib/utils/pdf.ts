@@ -2,9 +2,12 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Ensure worker is set up
-// We use a CDN-hosted worker to avoid complex build setup issues, but in production this should be bundled
+// We use a CDN-hosted worker to avoid complex build setup issues
 const pdfjsVersion = pdfjsLib.version;
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsVersion}/pdf.worker.min.js`;
+// Fallback to a known stable version if version is not available or strange
+const workerVersion = pdfjsVersion || '3.11.174';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${workerVersion}/build/pdf.worker.min.js`;
+console.log(`[PDF] Initializing worker with version: ${workerVersion}`);
 
 /**
  * Extracts text from a PDF file

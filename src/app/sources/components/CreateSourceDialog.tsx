@@ -185,13 +185,21 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
             // Dynamic import to avoid loading pdfjs if not needed
             const { extractTextFromPDF } = await import('@/lib/utils/pdf');
             const text = await extractTextFromPDF(selectedFile);
-            finalContent = text || '[PDF File]'; // Fallback if empty
+
+            if (text && text.trim().length > 0) {
+              finalContent = text;
+              toast.success(`成功讀取 PDF 內容 (${text.length} 字)`);
+            } else {
+              console.warn('PDF Parsing returned empty text');
+              finalContent = `[PDF File] ${selectedFile.name}`; // Fallback
+            }
             toast.dismiss('parsing');
           } catch (e) {
             console.error('PDF Parse error:', e);
             toast.dismiss('parsing');
-            toast.warning('無法讀取 PDF 文字，僅上傳檔案');
-            finalContent = '';
+            toast.warning('無法讀取 PDF 文字，將僅儲存檔案');
+            // 🔥 Critical Fix: Never leave content empty, otherwise embedContent fails (400)
+            finalContent = `[PDF File] ${selectedFile.name} (Content extraction failed)`;
           }
         }
 
