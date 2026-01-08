@@ -1411,7 +1411,7 @@ export class SupabaseAdapter implements StorageAdapter {
         .schema(schemaName)
         .from('artifacts')
         .select('id, created_at, project_id, archived, meta, content_type, original_content')
-        .or(`meta->>file_name.ilike.%${pattern}%, original_content.ilike.%${pattern}%, id.eq.${pattern}`)
+        .or(`meta->>file_name.ilike.%${pattern}%, original_content.ilike.%${pattern}%, id::text.ilike.%${pattern}%`)
         .order('created_at', { ascending: false })
         .limit(50);
 
