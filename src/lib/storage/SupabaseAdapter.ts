@@ -386,6 +386,7 @@ export class SupabaseAdapter implements StorageAdapter {
           .from('artifacts')
           .select('*')
           .eq('project_id', projectId)
+          .eq('archived', false) // 🔥 Fix: Don't search archived/deleted files
           .order('created_at', { ascending: false })
           .limit(20);
 
