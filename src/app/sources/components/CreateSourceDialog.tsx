@@ -178,29 +178,37 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
 
         // 檔案與圖片：上傳到 Storage
 
-        // Handle PDF text extraction
-        if (selectedFile.type === 'application/pdf') {
-          toast.loading('正在讀取 PDF 內容...', { id: 'parsing' });
-          try {
-            // Dynamic import to avoid loading pdfjs if not needed
-            const { extractTextFromPDF } = await import('@/lib/utils/pdf');
-            const text = await extractTextFromPDF(selectedFile);
+        // Handle Office & PDF extraction
+        toast.loading('正在讀取檔案內容...', { id: 'parsing' });
+        try {
+          const { FileParser } = await import('@/lib/utils/fileParser');
+          let text = '';
 
-            if (text && text.trim().length > 0) {
-              finalContent = text;
-              toast.success(`成功讀取 PDF 內容 (${text.length} 字)`);
-            } else {
-              console.warn('PDF Parsing returned empty text');
-              finalContent = `[PDF File] ${selectedFile.name}`; // Fallback
-            }
-            toast.dismiss('parsing');
-          } catch (e) {
-            console.error('PDF Parse error:', e);
-            toast.dismiss('parsing');
-            toast.warning('無法讀取 PDF 文字，將僅儲存檔案');
-            // 🔥 Critical Fix: Never leave content empty, otherwise embedContent fails (400)
-            finalContent = `[PDF File] ${selectedFile.name} (Content extraction failed)`;
+          if (selectedFile.type === 'application/pdf') {
+            text = await FileParser.parsePDF(selectedFile);
+          } else if (selectedFile.name.endsWith('.docx')) {
+            text = await FileParser.parseWord(selectedFile);
+          } else if (selectedFile.name.match(/\.(xlsx|xls)$/)) {
+            text = await FileParser.parseExcel(selectedFile);
           }
+
+          if (text && text.trim().length > 0) {
+            finalContent = text;
+            toast.success(`讀取成功 (${text.length} 字)`);
+          } else if (selectedFile.type.startsWith('image/')) {
+            // Images: Just use empty, let RAG handle visual or just title
+            finalContent = '';
+          } else {
+            // Fallback for failed parse or un-parsed types
+            console.warn('Parsing returned empty text or type not supported');
+            finalContent = `[Attachment] ${selectedFile.name}`;
+          }
+        } catch (e) {
+          console.error('File Parse error:', e);
+          toast.warning('無法讀取內容文字，僅儲存檔案');
+          finalContent = `[File] ${selectedFile.name} (Content extraction failed)`;
+        } finally {
+          toast.dismiss('parsing');
         }
 
         if (selectedFile.type.startsWith('application/') || selectedFile.type.startsWith('image/')) {
