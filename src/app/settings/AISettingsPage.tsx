@@ -433,35 +433,34 @@ function MaintenancePanel() {
 
   // 掃描文件
   const handleScan = async () => {
-    if (!scanPattern.trim()) {
-      toast.error('請輸入檔案名稱關鍵字');
+    // Check if adapter supports scanning
+    if (!('scanArtifacts' in adapter)) {
+      toast.error('目前的儲存 adapter 不支援掃描');
       return;
     }
 
     setIsScanning(true);
-    setScanResults([]);
+    setScanResults([]); // Changed from setScanResult to setScanResults
 
     try {
-      // Use adapter's schema-aware scan method
-      if (!adapter.scanArtifacts) {
-        throw new Error('此儲存適配器不支援掃描功能');
-      }
-
-      const { data, error } = await adapter.scanArtifacts(scanPattern);
+      const searchPattern = scanPattern.trim() || '*'; // Default to * if empty
+      // Cast to any to access custom method or use type guard
+      const { data, error } = await adapter.scanArtifacts(searchPattern); // Used existing adapter and destructuring
 
       if (error) {
-        toast.error('掃描失敗: ' + error.message);
+        console.error('Scan error:', error); // Changed from result.error to error
+        toast.error('掃描失敗: ' + error.message); // Changed from result.error.message to error.message
       } else {
-        setScanResults(data || []);
-        if (data?.length === 0) {
-          toast.info('未找到符合關鍵字的文件');
+        setScanResults(data || []); // Changed from setScanResult(result.data) to setScanResults(data)
+        if (data?.length === 0) { // Changed from result.data to data
+          toast.info('未找到符合的資料'); // Changed message
         } else {
-          toast.success(`找到 ${data?.length} 個相關文件`);
+          toast.success(`找到 ${data?.length} 筆資料`); // Changed from result.data to data and message
         }
       }
-    } catch (err) {
-      console.error('Scan failed:', err);
-      toast.error('掃描發生異常');
+    } catch (e) {
+      console.error('Scan exception:', e);
+      toast.error('掃描發生錯誤'); // Changed message
     } finally {
       setIsScanning(false);
     }

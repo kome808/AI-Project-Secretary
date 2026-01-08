@@ -1415,7 +1415,9 @@ export class SupabaseAdapter implements StorageAdapter {
         .from('artifacts')
         .select('id, created_at, project_id, archived, meta, content_type, original_content');
 
-      if (isUUID) {
+      if (pattern === '*' || pattern.trim() === '') {
+        // List recent
+      } else if (isUUID) {
         query = query.eq('id', pattern);
       } else {
         query = query.or(`meta->>file_name.ilike.%${pattern}%, original_content.ilike.%${pattern}%`);
