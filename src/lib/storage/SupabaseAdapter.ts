@@ -1402,6 +1402,31 @@ export class SupabaseAdapter implements StorageAdapter {
     }
   }
 
+  async scanArtifacts(pattern: string): Promise<StorageResponse<Artifact[]>> {
+    try {
+      const schemaName = getSchemaName();
+      console.log(`🔍 Scanning artifacts in schema '${schemaName}' with pattern: '${pattern}'`);
+
+      const { data, error } = await this.supabase
+        .schema(schemaName)
+        .from('artifacts')
+        .select('id, created_at, project_id, archived, meta, content_type, original_content')
+        .or(`meta->>file_name.ilike.%${pattern}%, original_content.ilike.%${pattern}%`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Supabase scanArtifacts error:', error);
+        return { data: null, error: new Error(error.message) };
+      }
+
+      return { data: data || [], error: null };
+    } catch (err) {
+      console.error('scanArtifacts exception:', err);
+      return { data: null, error: err as Error };
+    }
+  }
+
   async deleteArtifact(id: string): Promise<StorageResponse<void>> {
     try {
       const schemaName = getSchemaName();

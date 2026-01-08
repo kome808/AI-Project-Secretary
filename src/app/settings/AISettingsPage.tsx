@@ -442,15 +442,12 @@ function MaintenancePanel() {
     setScanResults([]);
 
     try {
-      // Direct raw query to find "Ghost" files, ignoring standard filters
-      const { data, error } = await (adapter as any).supabase
-        .from('artifacts')
-        .select('id, created_at, project_id, archived, meta, content_type')
-        // Try matching filename in meta (common pattern) or original_content fallback
-        // Note: ILIKE might be slow for full scans but ok for admin tool
-        .or(`meta->>file_name.ilike.%${scanPattern}%, original_content.ilike.%${scanPattern}%`)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      // Use adapter's schema-aware scan method
+      if (!adapter.scanArtifacts) {
+        throw new Error('此儲存適配器不支援掃描功能');
+      }
+
+      const { data, error } = await adapter.scanArtifacts(scanPattern);
 
       if (error) {
         toast.error('掃描失敗: ' + error.message);

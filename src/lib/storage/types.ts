@@ -503,6 +503,7 @@ export interface StorageAdapter {
 
   // Maintenance
   pruneOrphanedFiles?(projectId: string): Promise<StorageResponse<{ deletedCount: number }>>;
+  scanArtifacts?(pattern: string): Promise<StorageResponse<Artifact[]>>;
 
   // System Prompts Methods
   getSystemPrompts(projectId: string): Promise<StorageResponse<SystemPromptConfig>>;
