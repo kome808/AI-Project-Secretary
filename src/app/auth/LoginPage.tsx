@@ -7,7 +7,6 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Lock, Mail, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
-import { motion } from 'motion/react';
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -16,6 +15,7 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
+        // ... (keep same)
         e.preventDefault();
         setLoading(true);
 
@@ -88,12 +88,7 @@ export default function LoginPage() {
             <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:60px_60px]" />
             <div className="absolute left-0 top-0 w-full h-full bg-gradient-to-b from-background via-background to-primary/5 pointer-events-none" />
 
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="w-full max-w-md px-4 relative z-10"
-            >
+            <div className="w-full max-w-md px-4 relative z-10">
                 <div className="text-center mb-8">
                     <div className="mx-auto w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4 border border-primary/20 shadow-[0_0_30px_-10px_rgba(var(--primary),0.3)]">
                         <ShieldCheck className="w-8 h-8 text-primary" />
@@ -167,7 +162,7 @@ export default function LoginPage() {
                         </CardFooter>
                     </form>
                 </Card>
-            </motion.div>
+            </div>
         </div>
     );
 }
