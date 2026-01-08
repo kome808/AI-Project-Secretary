@@ -222,8 +222,29 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
 
       if (error) throw error;
 
+      // 🔥 Trigger RAG Embedding
+      toast.loading('正在建立 RAG 索引...', { id: 'embed' });
+      try {
+        await storage.embedContent(
+          finalContent,
+          data.id,
+          'artifact',
+          currentProject.id,
+          {
+            ...data.meta,
+            storage_path: storagePath, // Ensure storage_path is passed for file parsing
+            file_url: fileUrl
+          }
+        );
+        toast.dismiss('embed');
+      } catch (embedError) {
+        console.error('Embedding failed (background):', embedError);
+        // Don't fail the UI, just warn
+        toast.error('索引建立失敗，但文件已儲存');
+      }
+
       toast.dismiss('create');
-      toast.success('✓ 文件已匯入');
+      toast.success('✓ 文件已匯入並開始索引');
       handleClose();
       onCreated();
     } catch (error) {
