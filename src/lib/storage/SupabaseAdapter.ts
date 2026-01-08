@@ -1425,6 +1425,70 @@ export class SupabaseAdapter implements StorageAdapter {
     }
   }
 
+  async pruneOrphanedFiles(projectId: string): Promise<StorageResponse<{ deletedCount: number }>> {
+    try {
+      console.log('🧹 開始深度清理孤兒檔案:', projectId);
+      const schemaName = getSchemaName();
+
+      // 1. List all files in storage
+      // Note: This lists files in the folder named {projectId}
+      const { data: storageFiles, error: listError } = await this.supabase.storage
+        .from('aiproject-files')
+        .list(projectId, { limit: 1000 });
+
+      if (listError) throw listError;
+      if (!storageFiles || storageFiles.length === 0) {
+        return { data: { deletedCount: 0 }, error: null };
+      }
+
+      // 2. List all artifact storage_paths in DB
+      const { data: dbArtifacts, error: dbError } = await this.supabase
+        .schema(schemaName)
+        .from('artifacts')
+        .select('storage_path')
+        .eq('project_id', projectId)
+        .not('storage_path', 'is', null);
+
+      if (dbError) throw dbError;
+
+      const validPaths = new Set(dbArtifacts?.map(a => a.storage_path) || []);
+      const orphanedFiles: string[] = [];
+
+      // 3. Compare
+      for (const file of storageFiles) {
+        if (file.name === '.emptyFolderPlaceholder') continue;
+
+        // Supabase list returns filenames (e.g. "abc.pdf").
+        // But storage_path is stored as "projectId/filename" (e.g. "uuid/abc.pdf").
+        // We must construct the full path to match DB or use logic carefully.
+        const fullPath = `${projectId}/${file.name}`;
+
+        if (!validPaths.has(fullPath)) {
+          console.log('ATTRIP: Found orphan:', fullPath);
+          orphanedFiles.push(fullPath);
+        }
+      }
+
+      console.log(`🔍 掃描結果: 總檔案 ${storageFiles.length}, 孤兒檔案 ${orphanedFiles.length}`);
+
+      if (orphanedFiles.length === 0) {
+        return { data: { deletedCount: 0 }, error: null };
+      }
+
+      // 4. Delete orphans
+      const { error: deleteError } = await this.supabase.storage
+        .from('aiproject-files')
+        .remove(orphanedFiles);
+
+      if (deleteError) throw deleteError;
+
+      return { data: { deletedCount: orphanedFiles.length }, error: null };
+    } catch (error) {
+      console.error('❌ Prune orphaned files error:', error);
+      return { data: null, error: error as Error };
+    }
+  }
+
   async getItems(projectId: string, filters?: { status?: ItemStatus; type?: ItemType }): Promise<StorageResponse<Item[]>> {
     try {
       const schemaName = getSchemaName();
