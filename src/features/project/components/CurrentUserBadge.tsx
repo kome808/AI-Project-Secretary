@@ -211,7 +211,8 @@ export function CurrentUserBadge() {
                   )}
                 </button>
               );
-            </div>
+            })}
+          </div>
 
           <div className="p-2 border-t border-border mt-1">
             <button
@@ -223,9 +224,8 @@ export function CurrentUserBadge() {
             </button>
           </div>
         </div>
-        </div>
-  )
-}
-    </div >
+      )}
+    </div>
   );
+}
 }
