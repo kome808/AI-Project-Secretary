@@ -80,7 +80,7 @@ export default function App() {
 
     // 2. 自動設定為 ADMIN（開發模式）
     const currentUser = localStorage.getItem('current_user');
-    if (!currentUser) {
+    if (!currentUser && import.meta.env.DEV) {
       console.log('🔧 開發模式：未檢測到用戶，自動設定為 ADMIN');
       DevUserSwitcher.setAdmin();
     } else {
