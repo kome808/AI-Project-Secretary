@@ -85,6 +85,7 @@ export function DashboardPage() {
 
   // Quick Actions
   const aiQuickActions = [
+    "搜尋專案文件",
     "整理會議記錄",
     "分析需求文件",
     "建立功能模組",
@@ -95,7 +96,11 @@ export function DashboardPage() {
   ];
 
   const handleQuickAction = (action: string) => {
-    setAiPrompt(action);
+    if (action === "搜尋專案文件") {
+      setAiPrompt("搜尋：");
+    } else {
+      setAiPrompt(action);
+    }
   };
 
   const handleSendMessage = async (text: string, file?: File) => {
