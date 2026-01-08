@@ -1042,11 +1042,14 @@ ${validDocs.map((doc, i) => {
 目前專案「${currentProject.name}」的任務狀態如下：
 ${taskSummary}${taskCountNote}
 
-${knowledgeContext ? knowledgeContext : ''}
+${knowledgeContext ? knowledgeContext : '【注意】：目前知識庫中「找不到」與使用者查詢相關的文件。'}
 
 使用者意圖判斷：${intentResult ? `${intentResult.intent} (信心度: ${intentResult.confidence})` : '未判斷'}
 
-請根據以上資訊簡潔回答使用者的問題。${knowledgeContext ? `回答時請務必並優先參考上述【參考知識庫內容】中的資訊來回答，並在回答中明確指出引用的文件名稱。` : '如果資訊不足，請禮貌告知。'}
+請根據以上資訊回答使用者的問題。
+${knowledgeContext
+                            ? `回答時請務必並優先參考上述【參考知識庫內容】中的資訊來回答，並在回答中明確指出引用的文件名稱。`
+                            : `由於知識庫中沒有相關資訊，若使用者詢問專案具體文件內容（如規格、會議記錄等），請明確告知「在目前的專案文件中找不到相關資訊」，切勿自行編造內容。若為一般性專案管理問題則可依據專業知識回答。`}
 注意：請以繁體中文自然語言回答，不要使用 JSON 格式。回答請盡量精簡。`;
 
                     console.log('📝 [AI Chat Debug] RAG Context:', knowledgeContext);
