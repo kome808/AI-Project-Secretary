@@ -344,22 +344,34 @@ export class SupabaseAdapter implements StorageAdapter {
       // 🔍 Client-side Validation: Filter out 'Ghost Files' (deleted artifacts)
       // Since vector store might contain orphans, we must verify against the artifacts table.
       if (documents.length > 0) {
-        const sourceIds = documents.map((d: any) => d.metadata?.source_id).filter(Boolean);
+        // 1. First Pass: Filter out docs without ANY ID (Zombie Vectors)
+        documents = documents.filter((d: any) => {
+          const id = d.metadata?.source_id || d.metadata?.id;
+          return id && typeof id === 'string';
+        });
+
+        const sourceIds = documents.map((d: any) => d.metadata?.source_id || d.metadata?.id).filter(Boolean);
+
         if (sourceIds.length > 0) {
           const schemaName = getSchemaName();
           // 🔥 strict validation: check id AND project_id AND archived=false
           const { data: validArtifacts } = await this.supabase
             .schema(schemaName)
             .from('artifacts')
-            .select('id, meta, original_content') // Select more to debug
+            .select('id, meta, original_content')
             .in('id', sourceIds)
-            .eq('project_id', projectId) // Filter by project
+            .eq('project_id', projectId)
             .eq('archived', false);
 
-          console.log('[RAG] Valid Artifacts Found in DB:', validArtifacts?.length, validArtifacts?.map(a => a.id));
+          // console.log('[RAG] Valid Artifacts Found in DB:', validArtifacts?.length);
 
           const validIdSet = new Set(validArtifacts?.map(a => a.id));
-          documents = documents.filter((d: any) => d.metadata?.source_id && validIdSet.has(d.metadata.source_id));
+
+          // 2. Second Pass: Filter out docs that don't match a VALID artifact in DB
+          documents = documents.filter((d: any) => {
+            const id = d.metadata?.source_id || d.metadata?.id;
+            return id && validIdSet.has(id);
+          });
 
           // 🧹 Deduplication: Remove identical chunks (same content)
           const seenContent = new Set();
