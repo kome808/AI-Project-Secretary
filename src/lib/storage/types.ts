@@ -33,7 +33,7 @@ export interface Member {
 }
 
 // Module 2: Chat & Inbox Types
-export type ItemType = 'general' | 'pending' | 'cr' | 'decision' | 'action' | 'rule';
+export type ItemType = 'general' | 'pending' | 'cr' | 'decision' | 'action' | 'rule' | 'todo';
 export type ItemStatus =
   // AI 建議與確認流程
   | 'suggestion'         // AI 產生的建議（收件匣專用）
@@ -155,6 +155,48 @@ export interface CRMeta {
     location_info: string;
     highlight_text?: string;
   };
+}
+
+// 🔥 NEW: Requirement Snippet for accumulating discussions
+export type RequirementSnippetStatus = 'active' | 'superseded' | 'conflict';
+
+export interface RequirementSnippet {
+  id: string;
+  content: string; // Extracted requirement text
+  source_artifact_id?: string; // Link to source document
+  source_label: string; // e.g., "2025/01/05 會議記錄"
+  created_at: string;
+  status: RequirementSnippetStatus;
+  conflict_with?: string; // ID of conflicting snippet if any
+}
+
+// 🔥 NEW: Extended meta for feature/work nodes
+export interface FeatureNodeMeta {
+  isFeatureModule?: boolean;
+  isWorkPackage?: boolean;
+  requirement_snippets?: RequirementSnippet[];
+  consolidated_spec?: string; // AI-consolidated specification
+  consolidated_at?: string; // Last consolidation timestamp
+  order?: number;
+  ai_source?: string;
+  estimated_days?: number;
+}
+
+// 🔥 NEW: Suggestion meta for AI output with target node
+export interface SuggestionMeta {
+  ai_source?: string;
+  confidence?: number;
+  reasoning?: string;
+  summary?: string;
+  risk_level?: CRRiskLevel;
+  target_node_id?: string; // AI-suggested parent node
+  target_node_path?: string; // Human-readable path (e.g., "功能模組/後台/儀表板")
+  requirement_snippet?: RequirementSnippet; // Extracted requirement to append
+  citations?: Array<{
+    text: string;
+    source_name?: string;
+    artifact_id?: string;
+  }>;
 }
 
 // Module 11: Module & Page Execution Map
@@ -455,9 +497,12 @@ export interface StorageAdapter {
   updateSystemAIConfig(config: Omit<SystemAIConfig, 'id' | 'created_at' | 'updated_at'>): Promise<StorageResponse<SystemAIConfig>>;
   testAIConnection(provider: AIProvider, model: string, apiKey: string, apiEndpoint?: string): Promise<StorageResponse<{ success: boolean; message: string }>>;
 
-  // RAG Methods
+  // RAG / AI Methods
   embedContent(content: string, sourceId: string, sourceType: 'item' | 'artifact', projectId: string, metadata?: any): Promise<StorageResponse<{ success: boolean }>>;
   queryKnowledgeBase(query: string, projectId: string, threshold?: number, matchCount?: number): Promise<StorageResponse<{ documents: any[] }>>;
+
+  // Maintenance
+  pruneOrphanedFiles?(projectId: string): Promise<StorageResponse<{ deletedCount: number }>>;
 
   // System Prompts Methods
   getSystemPrompts(projectId: string): Promise<StorageResponse<SystemPromptConfig>>;

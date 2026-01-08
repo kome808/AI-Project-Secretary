@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CheckSquare, Briefcase, Layers } from 'lucide-react';
+import { CheckSquare, Briefcase, Layers, ListChecks } from 'lucide-react';
 import { ActionsView } from './views/ActionsView';
 import { ProjectWorkView } from './views/ProjectWorkView';
 import { FeaturesView } from './views/FeaturesView';
+import { TodosView } from './views/TodosView';
 
 // Hooks
 import { useTasks, ViewType } from '@/features/tasks/hooks/useTasks';
@@ -19,6 +20,7 @@ const TABS: TabConfig[] = [
   { id: 'actions', label: '我的任務', icon: CheckSquare },
   { id: 'work', label: '專案工作', icon: Briefcase },
   { id: 'features', label: '功能模組', icon: Layers },
+  { id: 'todos', label: '待辦事項', icon: ListChecks },
 ];
 
 export function TasksPage() {
@@ -45,16 +47,21 @@ export function TasksPage() {
 
       if (targetItem) {
         // Determine which view the item should be in
-        // Actions view: type='general' AND assignee_id === currentUser.id AND status !== 'completed'
-        const isInActionsView = targetItem.type === 'general' &&
+        let targetView: ViewType = 'work';
+
+        if (targetItem.type === 'todo') {
+          targetView = 'todos';
+        } else if (targetItem.meta?.isFeatureModule) {
+          targetView = 'features';
+        } else if (targetItem.type === 'general' &&
           targetItem.assignee_id === currentUser?.id &&
-          targetItem.status !== 'completed';
+          targetItem.status !== 'completed') {
+          targetView = 'actions';
+        }
 
         // Switch to the correct view if needed
-        if (isInActionsView && currentView !== 'actions') {
-          setCurrentView('actions');
-        } else if (!isInActionsView && currentView !== 'work') {
-          setCurrentView('work');
+        if (currentView !== targetView) {
+          setCurrentView(targetView);
         }
       }
 
@@ -70,28 +77,6 @@ export function TasksPage() {
             // Clear the URL parameter
             setSearchParams({});
           }, 3000);
-        } else {
-          // If still not found, try switching to the other view
-          if (currentView === 'actions') {
-            setCurrentView('work');
-          } else {
-            setCurrentView('actions');
-          }
-          // Retry after view switch
-          setTimeout(() => {
-            const retryElement = document.getElementById(`task-${highlightedItemId}`);
-            if (retryElement) {
-              retryElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              retryElement.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
-              setTimeout(() => {
-                retryElement.classList.remove('ring-2', 'ring-primary', 'ring-offset-2');
-                setSearchParams({});
-              }, 3000);
-            } else {
-              // Item not found in either view, clear params
-              setSearchParams({});
-            }
-          }, 500);
         }
       }, 500);
     }
@@ -138,8 +123,11 @@ export function TasksPage() {
                 i.assignee_id === currentUser?.id &&
                 i.status !== 'completed'
               ).length;
+            } else if (tab.id === 'todos') {
+              count = items.filter(i => i.type === 'todo' && i.status !== 'completed').length;
             } else if (tab.id === 'work') {
-              count = 0; // TODO: Implement work packages count
+              // Only count visible root items
+              count = items.filter(i => i.meta?.isWorkPackage && !i.parent_id).length;
             } else if (tab.id === 'features') {
               count = items.filter(i => i.meta?.isFeatureModule === true && !i.parent_id).length;
             }
@@ -182,6 +170,15 @@ export function TasksPage() {
             items={items}
             members={members}
             currentUser={currentUser}
+            loading={isLoading}
+            onItemUpdate={updateItem}
+            onRefresh={refresh}
+          />
+        )}
+        {currentView === 'todos' && (
+          <TodosView
+            items={items}
+            members={members}
             loading={isLoading}
             onItemUpdate={updateItem}
             onRefresh={refresh}

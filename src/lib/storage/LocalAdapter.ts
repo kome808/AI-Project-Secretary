@@ -652,15 +652,12 @@ export class LocalAdapter implements StorageAdapter {
   }
 
   // Work Package Methods
+  // 🔥 DEPRECATED: 舊版 work_packages 表已棄用，改用 items 表中的 isWorkPackage 項目
   async getWorkPackages(projectId: string): Promise<StorageResponse<WorkPackage[]>> {
     await this.simulateDelay();
-    try {
-      const all = this.read<WorkPackage[]>(STORAGE_KEYS.WORK_PACKAGES) || [];
-      const filtered = all.filter(wp => wp.project_id === projectId);
-      return { data: filtered, error: null };
-    } catch (e) {
-      return { data: null, error: e as Error };
-    }
+    // Return empty array to deprecate old table
+    console.warn('[DEPRECATED] getWorkPackages: This method is deprecated. Use items with meta.isWorkPackage instead.');
+    return { data: [], error: null };
   }
 
   async createWorkPackage(workPackage: Omit<WorkPackage, 'id' | 'created_at' | 'updated_at'>): Promise<StorageResponse<WorkPackage>> {
@@ -756,7 +753,7 @@ export class LocalAdapter implements StorageAdapter {
     try {
       const all = this.read<WorkActivity[]>(STORAGE_KEYS.WORK_ACTIVITIES) || [];
       const filtered = all.filter(wa => wa.id !== id);
-      this.write(STORAGE_KEYS.WORK_ACTIVITIES, filtered);
+      this.write(STORAGE_KEYS.WORK_ACTIVITIES, all);
       return { data: null, error: null };
     } catch (e) {
       return { data: null, error: e as Error };
@@ -1144,7 +1141,7 @@ export class LocalAdapter implements StorageAdapter {
           id: 'item_action_002',
           project_id: 'proj_nmth_001',
           type: 'action',
-          status: 'open',
+          status: 'not_started',
           title: '首頁前端實作',
           description: '根據設計稿完成首頁的前端開發',
           assignee_id: 'member_engineer_001',
@@ -1187,7 +1184,7 @@ export class LocalAdapter implements StorageAdapter {
           id: 'item_action_005',
           project_id: 'proj_nmth_001',
           type: 'action',
-          status: 'open',
+          status: 'not_started',
           title: '準備測試環境文件',
           description: '撰寫測試環境的部署與使用說明文件',
           assignee_id: 'member_engineer_001',
@@ -1218,7 +1215,7 @@ export class LocalAdapter implements StorageAdapter {
           id: 'item_pending_001',
           project_id: 'proj_nmth_001',
           type: 'pending',
-          status: 'open',
+          status: 'not_started',
           title: '等待客戶確認 Logo 使用規範',
           description: '需要國美館提供正式的 Logo 使用規範與品牌色彩指南',
           assignee_id: 'member_pm_001',
@@ -1551,6 +1548,86 @@ export class LocalAdapter implements StorageAdapter {
     });
   }
 
+  // RAG Methods
+  // Local Phase 預覽環境不支援向量嵌入，僅回傳成功模擬
+  async embedContent(content: string, sourceId: string, sourceType: 'item' | 'artifact', projectId: string, metadata?: any): Promise<StorageResponse<{ success: boolean }>> {
+    await this.simulateDelay();
+    // Do nothing for local storage
+    return { data: { success: true }, error: null };
+  }
+
+  // Local Phase 簡易關鍵字檢索與最近文件回傳
+  async queryKnowledgeBase(query: string, projectId: string, threshold?: number, matchCount: number = 5): Promise<StorageResponse<{ documents: any[] }>> {
+    await this.simulateDelay();
+    try {
+      const artifacts = this.read<Artifact[]>(STORAGE_KEYS.ARTIFACTS) || [];
+
+      // 1. Filter by project
+      const projectArtifacts = artifacts.filter(a => a.project_id === projectId);
+
+      // 2. Simple keyword matching (case-insensitive)
+      const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+
+      let matchedDocs = projectArtifacts.map(artifact => {
+        let score = 0;
+        const content = (artifact.original_content || '').toLowerCase();
+        const title = (artifact.meta?.file_name || artifact.id).toLowerCase();
+
+        keywords.forEach(keyword => {
+          if (content.includes(keyword)) score += 2;
+          if (title.includes(keyword)) score += 5;
+        });
+
+        // Boost recent files slightly
+        const ageHours = (Date.now() - new Date(artifact.created_at).getTime()) / (1000 * 60 * 60);
+        if (ageHours < 24) score += 1;
+
+        return {
+          id: artifact.id,
+          content: artifact.original_content || '[Binary File]',
+          metadata: {
+            title: artifact.meta?.file_name || 'Untitled',
+            source_id: artifact.id,
+            type: artifact.content_type,
+            created_at: artifact.created_at
+          },
+          similarity: score // Fake similarity score
+        };
+      });
+
+      // 3. Filter by score > 0 or just take top recent if no keywords match
+      matchedDocs = matchedDocs.filter(d => d.similarity > 0);
+
+      // If no matches found, return recently added text artifacts as fallback context
+      if (matchedDocs.length === 0) {
+        matchedDocs = projectArtifacts
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, matchCount)
+          .map(artifact => ({
+            id: artifact.id,
+            content: artifact.original_content || '[Binary File]',
+            metadata: {
+              title: artifact.meta?.file_name || 'Untitled',
+              source_id: artifact.id,
+              type: artifact.content_type,
+              created_at: artifact.created_at
+            },
+            similarity: 0.1 // Low score indicates fallback
+          }));
+      }
+
+      // Sort by score and take top N
+      matchedDocs.sort((a, b) => b.similarity - a.similarity);
+      const results = matchedDocs.slice(0, matchCount);
+
+      console.log(`[LocalAdapter] Retrieval for "${query}": found ${results.length} docs`);
+
+      return { data: { documents: results }, error: null };
+    } catch (e) {
+      return { data: null, error: e as Error };
+    }
+  }
+
   // System Prompts Methods
   async getSystemPrompts(projectId: string): Promise<StorageResponse<SystemPromptConfig>> {
     await this.simulateDelay();
@@ -1648,16 +1725,7 @@ export class LocalAdapter implements StorageAdapter {
     }
   }
 
-  async deleteArtifact(id: string): Promise<StorageResponse<void>> {
-    try {
-      const artifacts = this.read<Artifact[]>(STORAGE_KEYS.ARTIFACTS) || [];
-      const filtered = artifacts.filter(a => a.id !== id);
-      this.write(STORAGE_KEYS.ARTIFACTS, filtered);
-      return { data: undefined, error: null };
-    } catch (e) {
-      return { data: null, error: e as Error };
-    }
-  }
+
 
   async removeMember(id: string): Promise<StorageResponse<void>> {
     try {
@@ -1668,6 +1736,10 @@ export class LocalAdapter implements StorageAdapter {
     } catch (e) {
       return { data: null, error: e as Error };
     }
+  }
+
+  async pruneOrphanedFiles(projectId: string): Promise<StorageResponse<{ deletedCount: number }>> {
+    return { data: { deletedCount: 0 }, error: null };
   }
 
   async hardDeleteProject(id: string): Promise<StorageResponse<void>> {

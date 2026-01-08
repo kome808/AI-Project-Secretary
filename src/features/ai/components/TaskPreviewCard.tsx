@@ -12,9 +12,13 @@ export interface TaskSuggestion {
   description: string;
   due_date?: string;
   priority: 'low' | 'medium' | 'high';
-  type: 'action' | 'decision' | 'pending' | 'cr';
+  type: 'action' | 'decision' | 'pending' | 'cr' | 'todo';
   assignee_id?: string;
   selected: boolean;
+  // 🔥 NEW: Target node for AI categorization
+  target_node_id?: string | null;
+  target_node_path?: string | null;
+  requirement_snippet?: string | null;
 }
 
 interface TaskPreviewCardProps {
@@ -31,6 +35,7 @@ const PRIORITY_COLORS = {
 
 const TYPE_LABELS = {
   action: '待辦',
+  todo: '待辦事項',
   decision: '決議',
   pending: '待回覆',
   cr: '變更',
@@ -76,8 +81,8 @@ export function TaskPreviewCard({ task, onUpdate, members = [] }: TaskPreviewCar
     <div
       className={`
         p-4 rounded-[var(--radius-lg)] border-2 transition-all
-        ${task.selected 
-          ? 'bg-primary/5 border-primary' 
+        ${task.selected
+          ? 'bg-primary/5 border-primary'
           : 'bg-background border-border opacity-60'
         }
       `}
@@ -107,7 +112,7 @@ export function TaskPreviewCard({ task, onUpdate, members = [] }: TaskPreviewCar
                 placeholder="任務描述"
                 className="min-h-20"
               />
-              
+
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">到期日</label>
@@ -117,7 +122,7 @@ export function TaskPreviewCard({ task, onUpdate, members = [] }: TaskPreviewCar
                     onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">優先級</label>
                   <Select

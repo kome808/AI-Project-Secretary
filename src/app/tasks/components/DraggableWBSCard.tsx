@@ -32,6 +32,7 @@ interface DraggableWBSCardProps {
   onAddSubTask?: (parentItem: Item) => void;
   renderChildren?: () => React.ReactNode;
   renderMainContent?: () => React.ReactNode;
+  renderExtraInfo?: () => React.ReactNode; // New prop for extra info badges
   dndType?: string;
   acceptTypes?: string[];
   hideStatus?: boolean; // Option to hide status if needed
@@ -53,6 +54,7 @@ export function DraggableWBSCard({
   onAddSubTask,
   renderChildren,
   renderMainContent,
+  renderExtraInfo,
   dndType = UNIVERSAL_DND_TYPE,
   acceptTypes = [UNIVERSAL_DND_TYPE],
   hideStatus = false,
@@ -209,7 +211,7 @@ export function DraggableWBSCard({
   // Get assignee name
   const getAssigneeName = () => {
     // Try both assignee_id (standard) and assignee (legacy/string)
-    const assigneeId = item.assignee_id || item.assignee;
+    const assigneeId = item.assignee_id;
     if (!assigneeId) return '未指派';
 
     // Try to find by ID first, then email
@@ -298,6 +300,7 @@ export function DraggableWBSCard({
         >
           <span className="text-foreground truncate hover:underline">{item.title}</span>
           {extraBadge}
+          {renderExtraInfo && renderExtraInfo()}
         </div>
 
         {/* 優先度/逾期標籤 (保持在原位) */}

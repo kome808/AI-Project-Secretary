@@ -49,6 +49,7 @@ export function DashboardPage() {
   const [taskPreview, setTaskPreview] = useState<{
     tasks: TaskSuggestion[];
     aiMessage: string;
+    sourceArtifactId?: string;
   } | null>(null);
   const [aiPrompt, setAiPrompt] = useState('');
 
@@ -108,26 +109,73 @@ export function DashboardPage() {
 
     try {
       const storage = getStorageClient();
-      const artifactRes = await storage.createArtifact({
-        project_id: currentProject.id,
-        content_type: 'text/plain',
-        original_content: `AI 任務規劃：${selectedTasks.length} 個任務`,
-        meta: { channel: 'paste' as any, is_temporary: true, original_channel: 'ai_planning' }
-      });
+      let sourceId = taskPreview?.sourceArtifactId;
+
+      // If no source artifact linked (e.g. from chat text), create a summary artifact
+      if (!sourceId) {
+        const artifactRes = await storage.createArtifact({
+          project_id: currentProject.id,
+          content_type: 'text/plain',
+          original_content: `AI 任務規劃：${selectedTasks.length} 個任務`,
+          meta: { channel: 'paste' as any, is_temporary: true, original_channel: 'ai_planning' }
+        });
+        sourceId = artifactRes.data?.id;
+      }
 
       let successCount = 0;
       for (const task of selectedTasks) {
+        // 🔥 NEW: Determine parent and meta based on target_node_id
+        const targetNodeId = task.target_node_id;
+        let isFeatureModule = false;
+        let isWorkPackage = false;
+
+        if (targetNodeId) {
+          // Fetch target node to determine its type
+          const { data: targetNode } = await storage.getItemById(targetNodeId);
+          if (targetNode) {
+            isFeatureModule = !!targetNode.meta?.isFeatureModule;
+            isWorkPackage = !!targetNode.meta?.isWorkPackage;
+
+            // 🔥 Append requirement snippet to target node
+            if (task.requirement_snippet) {
+              const existingSnippets = targetNode.meta?.requirement_snippets || [];
+              const newSnippet = {
+                id: `snip-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                content: task.requirement_snippet,
+                source_artifact_id: sourceId,
+                source_label: new Date().toLocaleDateString('zh-TW'),
+                created_at: new Date().toISOString(),
+                status: 'active'
+              };
+              await storage.updateItem(targetNodeId, {
+                meta: {
+                  ...targetNode.meta,
+                  requirement_snippets: [...existingSnippets, newSnippet]
+                }
+              });
+            }
+          }
+        }
+
         await storage.createItem({
           project_id: currentProject.id,
           type: task.type,
           status: 'not_started',
           title: task.title,
           description: task.description,
-          source_artifact_id: artifactRes.data?.id,
+          source_artifact_id: sourceId,
           due_date: task.due_date,
           assignee_id: task.assignee_id,
           priority: task.priority,
-          meta: { ai_generated: true }
+          parent_id: targetNodeId || undefined, // 🔥 Link to target node
+          meta: {
+            ai_generated: true,
+            source: sourceId ? '會議記錄' : 'AI 規劃',
+            isFeatureModule: isFeatureModule || undefined,
+            isWorkPackage: isWorkPackage || undefined,
+            target_node_id: targetNodeId || undefined,
+            target_node_path: task.target_node_path || undefined
+          }
         });
         successCount++;
       }

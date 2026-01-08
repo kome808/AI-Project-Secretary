@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
-import { Item, ItemType } from '../../../lib/storage/types';
+import { Item } from '../../../lib/storage/types';
 import { SuggestionCardV2 } from './SuggestionCardV2';
-import { Inbox, Filter } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Inbox } from 'lucide-react';
 
 interface InboxListProps {
   items: Item[];
+  projectItems: Item[]; // All project items for tree selector
   selectedIds: string[];
   onToggleSelect: (itemId: string) => void;
   onConfirm: (item: Item) => void;
@@ -14,34 +13,16 @@ interface InboxListProps {
   onViewSource: (artifactId: string) => void;
 }
 
-// 只保留四個核心分類
-const TYPE_FILTERS: Array<{ value: 'all' | ItemType; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'action', label: '待辦' },
-  { value: 'pending', label: '待回覆' },
-  { value: 'decision', label: '決議' },
-  { value: 'cr', label: '變更' }
-];
-
-export function InboxList({ 
-  items, 
+export function InboxList({
+  items,
+  projectItems,
   selectedIds,
   onToggleSelect,
-  onConfirm, 
-  onReject, 
+  onConfirm,
+  onReject,
   onEdit,
-  onViewSource 
+  onViewSource
 }: InboxListProps) {
-  const [activeFilter, setActiveFilter] = useState<'all' | ItemType>('all');
-
-  const filteredItems = activeFilter === 'all' 
-    ? items 
-    : items.filter(item => item.type === activeFilter);
-
-  const getCountByType = (type: 'all' | ItemType) => {
-    if (type === 'all') return items.length;
-    return items.filter(item => item.type === type).length;
-  };
 
   if (items.length === 0) {
     return (
@@ -57,52 +38,22 @@ export function InboxList({
 
   return (
     <div className="space-y-4">
-      {/* Filter Pills */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <label className="text-muted-foreground text-sm">篩選：</label>
-        </div>
-        {TYPE_FILTERS.map(filter => {
-          const count = getCountByType(filter.value);
-          return (
-            <Badge
-              key={filter.value}
-              variant={activeFilter === filter.value ? 'default' : 'outline'}
-              className="cursor-pointer whitespace-nowrap transition-colors"
-              onClick={() => setActiveFilter(filter.value)}
-            >
-              <label className="cursor-pointer">
-                {filter.label} ({count})
-              </label>
-            </Badge>
-          );
-        })}
-      </div>
-
       {/* Cards List */}
-      {filteredItems.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <label>
-            此類別沒有建議卡
-          </label>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredItems.map(item => (
-            <SuggestionCardV2
-              key={item.id}
-              item={item}
-              isSelected={selectedIds.includes(item.id)}
-              onToggleSelect={onToggleSelect}
-              onConfirm={onConfirm}
-              onReject={onReject}
-              onEdit={onEdit}
-              onViewSource={onViewSource}
-            />
-          ))}
-        </div>
-      )}
+      <div className="space-y-3">
+        {items.map(item => (
+          <SuggestionCardV2
+            key={item.id}
+            item={item}
+            projectItems={projectItems}
+            isSelected={selectedIds.includes(item.id)}
+            onToggleSelect={onToggleSelect}
+            onConfirm={onConfirm}
+            onReject={onReject}
+            onEdit={onEdit}
+            onViewSource={onViewSource}
+          />
+        ))}
+      </div>
     </div>
   );
 }

@@ -13,7 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { useProject } from '../context/ProjectContext';
 import { Artifact, Item } from '@/lib/storage/types';
 import { getStorageClient } from '@/lib/storage';
-import { FileText, RefreshCw, Plus, Search, Filter, ChevronLeft, ChevronRight, Trash2, X, Hash } from 'lucide-react';
+import { FileText, RefreshCw, Plus, Search, Filter, ChevronLeft, ChevronRight, Trash2, X, Hash, Database, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,7 @@ import { SourceCard } from './components/SourceCard';
 import { SourceDetailPanel } from './components/SourceDetailPanel';
 import { CreateSourceDialog } from './components/CreateSourceDialog';
 import { useSources, SourceType, UsageFilter } from '@/features/sources/hooks/useSources';
+import { getCurrentUser, isSystemAdmin } from '@/lib/permissions/statusPermissions';
 
 export function SourcesPage() {
   const { currentProject } = useProject();
@@ -62,6 +63,8 @@ export function SourcesPage() {
   const [isCleaning, setIsCleaning] = useState(false);
   const [isCleanupConfirmOpen, setIsCleanupConfirmOpen] = useState(false);
   const [cleanupCount, setCleanupCount] = useState(0);
+  const [isPruning, setIsPruning] = useState(false);
+  const [isPruneConfirmOpen, setIsPruneConfirmOpen] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -92,6 +95,41 @@ export function SourcesPage() {
 
     setCleanupCount(removableArtifacts.length);
     setIsCleanupConfirmOpen(true);
+  };
+
+  const handlePruneStorage = () => {
+    if (!currentProject) return;
+    setIsPruneConfirmOpen(true);
+  };
+
+  const executePruneStorage = async () => {
+    if (!currentProject) return;
+    setIsPruneConfirmOpen(false);
+
+    setIsPruning(true);
+    try {
+      const storage = getStorageClient();
+      if (!storage.pruneOrphanedFiles) {
+        toast.info('此環境不支援儲存空間清理');
+        return;
+      }
+
+      const { data, error } = await storage.pruneOrphanedFiles(currentProject.id);
+
+      if (error) throw error;
+
+      const count = data?.deletedCount || 0;
+      if (count > 0) {
+        toast.success(`清理完成：已移除 ${count} 個孤兒檔案`);
+      } else {
+        toast.info('掃描完成：沒有發現孤兒檔案');
+      }
+    } catch (error) {
+      console.error('Prune failed:', error);
+      toast.error('清理過程中發生錯誤');
+    } finally {
+      setIsPruning(false);
+    }
   };
 
   const executeCleanup = async () => {
@@ -185,6 +223,18 @@ export function SourcesPage() {
                   return a.meta?.is_manual !== true && strictCount === 0;
                 }).length
               })</label>
+            </Button>
+          )}
+          {!selectionMode && getCurrentUser() && isSystemAdmin(getCurrentUser()!) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePruneStorage}
+              disabled={isPruning || isLoading}
+              className="mr-2 border-dashed text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200"
+            >
+              {isPruning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
+              <label>深度清理</label>
             </Button>
           )}
           {!selectionMode ? (
@@ -354,125 +404,127 @@ export function SourcesPage() {
       </div>
 
       {/* Sources Grid */}
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div
-              key={i}
-              className="h-48 rounded-[var(--radius-lg)] bg-muted/50 animate-pulse"
-            />
-          ))}
-        </div>
-      ) : filteredArtifacts.length === 0 ? (
-        <Card>
-          <CardContent className="py-16">
-            <div className="text-center space-y-[var(--spacing-3)]">
-              <FileText className="h-16 w-16 mx-auto text-muted-foreground opacity-30" />
-              <div>
-                <p className="text-muted-foreground">
-                  <label>
-                    {searchQuery.trim()
-                      ? '沒有找到符合的文件'
-                      : '目前沒有文件'
-                    }
-                  </label>
-                </p>
-                {!searchQuery.trim() && (
-                  <label className="text-muted-foreground opacity-70">
-                    點擊「匯入文件」開始建立證據鏈
-                  </label>
-                )}
-              </div>
-              {(searchQuery.trim() || typeFilter !== 'all' || usageFilter !== 'all') && (
-                <Button
-                  variant="link"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setTypeFilter('all');
-                    setUsageFilter('all');
-                  }}
-                >
-                  清除篩選條件
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <div className="grid gap-[var(--spacing-4)] md:grid-cols-2 lg:grid-cols-3">
-            {paginatedArtifacts.map((artifact) => (
-              <SourceCard
-                key={artifact.id}
-                artifact={artifact}
-                citationCount={getCitationCount(artifact.id)}
-                onClick={handleSelectArtifact}
-                selected={selectedIds.includes(artifact.id)}
-                onToggleSelect={selectionMode ? toggleSelect : undefined}
+      {
+        isLoading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                className="h-48 rounded-[var(--radius-lg)] bg-muted/50 animate-pulse"
               />
             ))}
           </div>
-
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-[var(--spacing-2)] mt-[var(--spacing-6)]">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className="flex items-center gap-[var(--spacing-2)]">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                  const showPage =
-                    page === 1 ||
-                    page === totalPages ||
-                    Math.abs(page - currentPage) <= 1;
-
-                  const showEllipsis =
-                    (page === 2 && currentPage > 3) ||
-                    (page === totalPages - 1 && currentPage < totalPages - 2);
-
-                  if (showEllipsis) {
-                    return <span key={page} className="px-[var(--spacing-2)] text-muted-foreground">...</span>;
-                  }
-
-                  if (!showPage) return null;
-
-                  return (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className="min-w-[2.5rem]"
-                    >
-                      {page}
-                    </Button>
-                  );
-                })}
+        ) : filteredArtifacts.length === 0 ? (
+          <Card>
+            <CardContent className="py-16">
+              <div className="text-center space-y-[var(--spacing-3)]">
+                <FileText className="h-16 w-16 mx-auto text-muted-foreground opacity-30" />
+                <div>
+                  <p className="text-muted-foreground">
+                    <label>
+                      {searchQuery.trim()
+                        ? '沒有找到符合的文件'
+                        : '目前沒有文件'
+                      }
+                    </label>
+                  </p>
+                  {!searchQuery.trim() && (
+                    <label className="text-muted-foreground opacity-70">
+                      點擊「匯入文件」開始建立證據鏈
+                    </label>
+                  )}
+                </div>
+                {(searchQuery.trim() || typeFilter !== 'all' || usageFilter !== 'all') && (
+                  <Button
+                    variant="link"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setTypeFilter('all');
+                      setUsageFilter('all');
+                    }}
+                  >
+                    清除篩選條件
+                  </Button>
+                )}
               </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid gap-[var(--spacing-4)] md:grid-cols-2 lg:grid-cols-3">
+              {paginatedArtifacts.map((artifact) => (
+                <SourceCard
+                  key={artifact.id}
+                  artifact={artifact}
+                  citationCount={getCitationCount(artifact.id)}
+                  onClick={handleSelectArtifact}
+                  selected={selectedIds.includes(artifact.id)}
+                  onToggleSelect={selectionMode ? toggleSelect : undefined}
+                />
+              ))}
             </div>
-          )}
 
-          {/* Results info */}
-          <div className="text-center text-muted-foreground">
-            顯示 {startIndex + 1}-{Math.min(endIndex, filteredArtifacts.length)} / 共 {filteredArtifacts.length} 筆
-          </div>
-        </>
-      )}
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-[var(--spacing-2)] mt-[var(--spacing-6)]">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <div className="flex items-center gap-[var(--spacing-2)]">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    const showPage =
+                      page === 1 ||
+                      page === totalPages ||
+                      Math.abs(page - currentPage) <= 1;
+
+                    const showEllipsis =
+                      (page === 2 && currentPage > 3) ||
+                      (page === totalPages - 1 && currentPage < totalPages - 2);
+
+                    if (showEllipsis) {
+                      return <span key={page} className="px-[var(--spacing-2)] text-muted-foreground">...</span>;
+                    }
+
+                    if (!showPage) return null;
+
+                    return (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className="min-w-[2.5rem]"
+                      >
+                        {page}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Results info */}
+            <div className="text-center text-muted-foreground">
+              顯示 {startIndex + 1}-{Math.min(endIndex, filteredArtifacts.length)} / 共 {filteredArtifacts.length} 筆
+            </div>
+          </>
+        )
+      }
 
       {/* Detail Panel */}
       <SourceDetailPanel
@@ -485,7 +537,7 @@ export function SourcesPage() {
 
 
 
-      // ...
+  // ...
 
       {/* Create Dialog */}
       <CreateSourceDialog
@@ -512,6 +564,25 @@ export function SourcesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+
+      <AlertDialog open={isPruneConfirmOpen} onOpenChange={setIsPruneConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要執行深度清理嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              這將會掃描 Supabase 儲存空間，比對資料庫記錄，並永久刪除所有「孤兒檔案」（資料庫無記錄但硬碟存在的檔案）。
+              <br /><br />
+              <strong>注意：</strong> 此操作涉及直接刪除檔案且無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={executePruneStorage} className="bg-amber-600 text-white hover:bg-amber-700">
+              確認清理
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div >
   );
 }

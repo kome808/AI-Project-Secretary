@@ -31,7 +31,6 @@ export function ProjectWorkView({
   onRefresh
 }: ProjectWorkViewProps) {
   const { currentProject } = useProject();
-  const [workPackages, setWorkPackages] = useState<WorkPackage[]>([]);
   const [showCompleted, setShowCompleted] = useState<boolean>(() => {
     const saved = localStorage.getItem('projectWork_showCompleted');
     return saved === 'true';
@@ -49,27 +48,10 @@ export function ProjectWorkView({
   const [targetWorkPackageId, setTargetWorkPackageId] = useState<string>('');
   const [editingItemParent, setEditingItemParent] = useState<string>('');
 
-  // Load work packages
-  useEffect(() => {
-    loadWorkPackages();
-  }, [currentProject]);
-
-  const loadWorkPackages = async () => {
-    const storage = getStorageClient();
-    const projectId = currentProject?.id;
-    if (!projectId) return;
-
-    const { data } = await storage.getWorkPackages(projectId);
-    if (data) {
-      // Sort by meta.order or created_at
-      const sorted = data.sort((a, b) => {
-        const orderA = a.meta?.order ?? new Date(a.created_at).getTime();
-        const orderB = b.meta?.order ?? new Date(b.created_at).getTime();
-        return orderA - orderB;
-      });
-      setWorkPackages(sorted);
-    }
-  };
+  // 🔥 不再使用舊版 work_packages 表，改用空陣列
+  const workPackages: WorkPackage[] = [];
+  const loadWorkPackages = async () => { /* no-op: deprecated */ };
+  const setWorkPackages = (_: WorkPackage[]) => { /* no-op: deprecated */ };
 
   // Filter items by completion status
   const visibleItems = useMemo(() => {
@@ -116,38 +98,15 @@ export function ProjectWorkView({
       });
   }, [uncategorizedItems]);
 
-  // 🔥🔥 統一所有第一層項目，按 order 排序
-  // 新的專案工作會存到 items 表（帶有 meta.isWorkPackage: true）
-  // 舊的專案工作仍在 work_packages 表，需要轉換後合併
+  // 🔥 統一所有第一層項目，按 order 排序
+  // 現在只使用 items 表（不再使用舊版 work_packages 表）
   const allRootItems = useMemo(() => {
-    // 轉換舊的 WorkPackage（向後相容）
-    const convertWpToItem = (wp: WorkPackage): Item => ({
-      id: wp.id,
-      project_id: wp.project_id,
-      type: 'general',
-      status: wp.status as any,
-      title: wp.title,
-      description: wp.description || '',
-      assignee_id: wp.owner_id,
-      due_date: wp.target_date,
-      created_at: wp.created_at,
-      updated_at: wp.updated_at || wp.created_at,
-      meta: { isWorkPackage: true, order: wp.meta?.order }
-    });
-
-    const wpAsItems = workPackages.map(wp => convertWpToItem(wp));
-
-    // 合併：舊的 WorkPackage + 新的根項目（來自 items 表）
-    // wbsRootItems 已經包含所有第一層 items（包括新的專案工作）
-    const combined = [...wpAsItems, ...wbsRootItems];
-
-    // 按 order 排序
-    return combined.sort((a, b) => {
+    return wbsRootItems.sort((a, b) => {
       const orderA = a.meta?.order ?? new Date(a.created_at).getTime();
       const orderB = b.meta?.order ?? new Date(b.created_at).getTime();
       return orderA - orderB;
     });
-  }, [workPackages, wbsRootItems]);
+  }, [wbsRootItems]);
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(prev => {

@@ -18,7 +18,7 @@ export interface Message {
 interface UseDashboardAIProps {
     currentProject: any;
     members: any[];
-    setTaskPreview: (preview: { tasks: TaskSuggestion[]; aiMessage: string } | null) => void;
+    setTaskPreview: (preview: { tasks: TaskSuggestion[]; aiMessage: string; sourceArtifactId?: string } | null) => void;
     items?: any[]; // Allow generic items for now
 }
 
@@ -253,7 +253,7 @@ ${analysis.reasoning || ''}
 
             // 🎯 任務規劃 (Planning)
             // 🎯 智慧分析 (Smart Analysis)
-            if (await processSmartAnalysis(input, pendingFile.parsedContent.content)) {
+            if (await processSmartAnalysis(input, pendingFile.parsedContent.content, pendingFile.artifactId)) {
                 return;
             }
 
@@ -279,7 +279,7 @@ ${analysis.reasoning || ''}
     };
 
     // Helper: Smart Analysis (Tasks, Decisions, Changes)
-    async function processSmartAnalysis(input: string, content?: string): Promise<boolean> {
+    async function processSmartAnalysis(input: string, content?: string, sourceArtifactId?: string): Promise<boolean> {
         // 關鍵字擴充：包含分析、會議、記錄等
         const analysisKeywords = ['待辦', '任務', 'Task', 'To-do', 'todo', '工作', '計畫', '步驟', '整理', '分析', '解析', '會議', '記錄', '紀錄', 'meeting', 'minutes'];
 
@@ -308,10 +308,52 @@ ${analysis.reasoning || ''}
                     maxTokens: 8000
                 });
 
+                // 🔥 NEW: Fetch project structure for context
+                const { data: allItems } = await storage.getItems(currentProject.id);
+                const projectNodes = (allItems || []).filter(item =>
+                    item.status !== 'suggestion' &&
+                    (item.meta?.isFeatureModule || item.meta?.isWorkPackage)
+                );
+
+                // Build tree context string
+                const buildTreeContext = (nodes: typeof projectNodes): string => {
+                    const rootFeatures = nodes.filter(n => n.meta?.isFeatureModule && !n.parent_id);
+                    const rootWork = nodes.filter(n => n.meta?.isWorkPackage && !n.parent_id);
+
+                    const buildBranch = (parentId: string | undefined, indent: number): string => {
+                        const children = nodes.filter(n => n.parent_id === parentId);
+                        return children.map(child => {
+                            const prefix = '  '.repeat(indent) + '- ';
+                            const childBranch = buildBranch(child.id, indent + 1);
+                            return `${prefix}${child.title} (id: ${child.id})${childBranch ? '\n' + childBranch : ''}`;
+                        }).join('\n');
+                    };
+
+                    let ctx = '';
+                    if (rootFeatures.length > 0) {
+                        ctx += '功能模組:\n';
+                        ctx += rootFeatures.map(f => `- ${f.title} (id: ${f.id})\n${buildBranch(f.id, 1)}`).join('\n');
+                    }
+                    if (rootWork.length > 0) {
+                        if (ctx) ctx += '\n\n';
+                        ctx += '專案工作:\n';
+                        ctx += rootWork.map(w => `- ${w.title} (id: ${w.id})\n${buildBranch(w.id, 1)}`).join('\n');
+                    }
+                    return ctx || '(尚無功能模組或專案工作)';
+                };
+
+                const projectStructure = buildTreeContext(projectNodes);
+
                 const sysPrompt = `你是一位專業的專案經理與系統分析師。請深入分析提供的會議記錄或文件，識別出以下三類項目：
-1. 待辦事項 (Action Items) - 具體的任務。
-2. 重要決議 (Decisions) - 已達成的共識或是確認的事項。
-3. 變更需求 (Features/CR) - 對功能或流程的調整、新增。
+1. 待辦事項 (Todos) - 會議中指派的具體待辦事項 (Action Items)。(Type: 'todo')
+2. 重要決議 (Decisions) - 已達成的共識或是確認的事項。(Type: 'decision')
+3. 變更需求 (Features/CR) - 對功能或流程的調整、新增。(Type: 'cr')
+
+🔥 重要：以下是此專案目前的功能模組與專案工作架構。如果文件內容談論的是與其中某個節點相關的需求或任務，請在 target_node_id 欄位填入該節點的 ID。如果無法判斷屬於哪個節點，請留空或填 null。
+
+---
+${projectStructure}
+---
 
 請務必只回傳 JSON 格式，不要有 Markdown，格式如下：
 {
@@ -320,8 +362,10 @@ ${analysis.reasoning || ''}
       "title": "項目標題",
       "description": "詳細說明（人、事、時、地、物）",
       "priority": "high|medium|low",
-      "type": "action" | "decision" | "cr",
-      "estimated_days": 1
+      "type": "todo" | "decision" | "cr",
+      "estimated_days": 1,
+      "target_node_id": "節點ID（若與特定功能模組或專案工作相關）或 null",
+      "requirement_snippet": "從原文擷取的相關需求描述（用於累積到該節點的需求規格中）"
     }
   ],
   "summary": "簡短的文件摘要"
@@ -342,6 +386,26 @@ ${analysis.reasoning || ''}
                 } catch (e) { console.error(e); }
 
                 if (parsedItems.length > 0) {
+                    // Find node paths for display
+                    const getNodePath = (nodeId: string | null): string | null => {
+                        if (!nodeId) return null;
+                        const node = projectNodes.find(n => n.id === nodeId);
+                        if (!node) return null;
+
+                        const path: string[] = [node.title];
+                        let current = node;
+                        while (current.parent_id) {
+                            const parent = projectNodes.find(n => n.id === current.parent_id);
+                            if (parent) {
+                                path.unshift(parent.title);
+                                current = parent;
+                            } else break;
+                        }
+
+                        const prefix = node.meta?.isFeatureModule ? '功能模組' : '專案工作';
+                        return `${prefix} / ${path.join(' / ')}`;
+                    };
+
                     setTaskPreview({
                         tasks: parsedItems.map((t: any) => ({
                             id: `ai-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -349,10 +413,15 @@ ${analysis.reasoning || ''}
                             title: `[${t.type === 'decision' ? '決議' : t.type === 'cr' ? '變更' : '待辦'}] ${t.title}`,
                             description: t.description || '',
                             priority: (t.priority || 'medium') as 'high' | 'medium' | 'low',
-                            type: t.type || 'action',
-                            estimated_days: t.estimated_days || 1
+                            type: t.type || 'todo',
+                            estimated_days: t.estimated_days || 1,
+                            // 🔥 NEW: Include target node info
+                            target_node_id: t.target_node_id || null,
+                            target_node_path: getNodePath(t.target_node_id) || null,
+                            requirement_snippet: t.requirement_snippet || null
                         })),
-                        aiMessage: `我已分析文件內容，整理出 ${parsedItems.length} 個重點項目（含待辦、決議與變更）。\n\n摘要：${summary}`
+                        aiMessage: `我已分析文件內容，整理出 ${parsedItems.length} 個重點項目（含待辦、決議與變更）。\n\n摘要：${summary}`,
+                        sourceArtifactId
                     });
 
                     addMessage('assistant', '已為您整理出建議的待辦事項，請查看右側面板進行確認與建立。');
@@ -654,7 +723,7 @@ ${analysis.reasoning || ''}
 
                 // 其他文件分析
                 // 🎯 Smart Analysis for New File (Auto-trigger if content is relevant)
-                if (await processSmartAnalysis(input || '', parsedContent?.content)) {
+                if (await processSmartAnalysis(input || '', parsedContent?.content, artifactId)) {
                     // Handled by smart analysis
                 } else {
                     await processDocumentAnalysis(input || '', {

@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useProject } from '@/app/context/ProjectContext';
 import { getStorageClient } from '../../../lib/storage';
-import { 
-  FileText, 
-  Link2, 
-  MessageSquare, 
+import {
+  FileText,
+  Link2,
+  MessageSquare,
   AlertCircle,
   Loader2,
   Upload,
@@ -69,39 +69,70 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
   const [channel, setChannel] = useState<ChannelType>('paste');
   const [sourceInfo, setSourceInfo] = useState('');
   const [content, setContent] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const processFile = (file: File) => {
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('檔案大小超過 10MB 限制');
+      return;
+    }
+
+    setSelectedFile(file);
+    if (!sourceInfo) {
+      setSourceInfo(file.name);
+    }
+
+    // Auto-set channel to upload
+    setChannel('upload');
+
+    // For text files, read content
+    if (file.type === 'text/plain' || file.type === 'text/markdown') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        setContent(text);
+      };
+      reader.readAsText(file);
+    } else {
+      // For other files, we'll store the file info
+      setContent(`[檔案: ${file.name}, 大小: ${(file.size / 1024).toFixed(2)} KB]`);
+    }
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Check file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('檔案大小超過 10MB 限制');
-        return;
-      }
-      
-      setSelectedFile(file);
-      if (!sourceInfo) {
-        setSourceInfo(file.name);
-      }
-      
-      // Auto-set channel to upload
-      setChannel('upload');
-      
-      // For text files, read content
-      if (file.type === 'text/plain' || file.type === 'text/markdown') {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target?.result as string;
-          setContent(text);
-        };
-        reader.readAsText(file);
-      } else {
-        // For other files, we'll store the file info
-        setContent(`[檔案: ${file.name}, 大小: ${(file.size / 1024).toFixed(2)} KB]`);
-      }
+      processFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      // Basic type validation using ACCEPTED_FILE_TYPES keys
+      // Note: This is a loose check, mainly relying on processFile logic later or user understanding
+      processFile(file);
     }
   };
 
@@ -115,7 +146,8 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
 
   const handleCreate = async () => {
     if (!currentProject) return;
-    
+    // ... (rest of handleCreate remains same, so we don't need to replace it entirely if we scope correctly, but here we are replacing a larger chunk including handleFileSelect)
+
     // Validate based on source type
     if (sourceType === 'file' && !selectedFile) {
       toast.error('請選擇要上傳的檔案');
@@ -129,13 +161,13 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
     setIsCreating(true);
     try {
       const storage = getStorageClient();
-      
+
       let contentType = 'text/plain';
       let finalContent = content.trim();
       let storagePath: string | undefined;
       let fileUrl: string | undefined;
       let fileSize: number | undefined;
-      
+
       if (sourceType === 'conversation') {
         contentType = 'text/conversation';
       } else if (sourceType === 'link') {
@@ -143,23 +175,23 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
       } else if (sourceType === 'file' && selectedFile) {
         contentType = selectedFile.type;
         fileSize = selectedFile.size;
-        
+
         // 檔案與圖片：上傳到 Storage
         if (selectedFile.type.startsWith('application/') || selectedFile.type.startsWith('image/')) {
           toast.loading('上傳檔案中...', { id: 'upload' });
-          
+
           const uploadResult = await storage.uploadFile(currentProject.id, selectedFile);
-          
+
           if (uploadResult.error) {
             toast.dismiss('upload');
             throw uploadResult.error;
           }
-          
+
           if (uploadResult.data) {
             storagePath = uploadResult.data.storagePath;
             fileUrl = uploadResult.data.fileUrl;
             finalContent = ''; // 檔案不存 original_content
-            
+
             toast.dismiss('upload');
             toast.loading('建立文件記錄...', { id: 'create' });
           }
@@ -184,6 +216,7 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
           source_info: sourceInfo || undefined,
           channel,
           file_name: selectedFile?.name,
+          is_manual: true // Mark as valid manual import
         }
       });
 
@@ -207,6 +240,7 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
     setSourceInfo('');
     setContent('');
     setSelectedFile(null);
+    setIsDragging(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -263,7 +297,10 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
                 variant={sourceType === 'file' ? 'secondary' : 'ghost'}
                 size="sm"
                 className="flex-1 gap-2"
-                onClick={() => setSourceType('file')}
+                onClick={() => {
+                  setSourceType('file');
+                  setChannel('upload');
+                }}
               >
                 <Upload className="h-4 w-4" />
                 <label className="cursor-pointer">檔案</label>
@@ -312,7 +349,7 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
                   onChange={handleFileSelect}
                   className="hidden"
                 />
-                
+
                 {selectedFile ? (
                   <div className="border-2 border-dashed rounded-[var(--radius-lg)] p-4">
                     <div className="flex items-center gap-3">
@@ -334,20 +371,32 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
                     </div>
                   </div>
                 ) : (
-                  <button
-                    type="button"
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full border-2 border-dashed rounded-[var(--radius-lg)] p-8 hover:bg-muted/50 transition-colors"
+                    className={`
+                      w-full border-2 border-dashed rounded-[var(--radius-lg)] p-8 
+                      transition-colors cursor-pointer flex flex-col items-center gap-3
+                      ${isDragging
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-muted-foreground/25 hover:bg-muted/50 text-muted-foreground'}
+                    `}
                   >
-                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                      <Upload className="h-12 w-12" />
-                      <div className="text-center">
-                        <p className="font-medium">點擊上傳檔案</p>
-                        <p className="text-sm">支援 PDF、Word、Excel、TXT、MD、圖檔</p>
-                        <p className="text-xs mt-1">檔案大小限制：10MB</p>
-                      </div>
+                    <Upload className={`h-12 w-12 ${isDragging ? 'animate-bounce' : ''}`} />
+                    <div className="text-center">
+                      <p className="font-medium">
+                        {isDragging ? '放開以已上傳檔案' : '點擊或拖曳檔案至此'}
+                      </p>
+                      <p className="text-sm mt-1 opacity-80">
+                        支援 PDF、Word、Excel、TXT、MD、圖檔
+                      </p>
+                      <p className="text-xs mt-1 opacity-60">
+                        檔案大小限制：10MB
+                      </p>
                     </div>
-                  </button>
+                  </div>
                 )}
               </>
             ) : (
@@ -402,7 +451,7 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
             取消
           </Button>
           <Button onClick={handleCreate} disabled={
-            isCreating || 
+            isCreating ||
             (sourceType === 'file' ? !selectedFile : !content.trim())
           }>
             {isCreating ? (

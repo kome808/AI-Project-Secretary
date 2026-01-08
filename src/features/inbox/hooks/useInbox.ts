@@ -25,6 +25,70 @@ export const useInbox = () => {
         enabled: !!projectId,
     });
 
+    // Fetch project items for tree selector
+    // Match ProjectWorkView logic exactly:
+    // - Feature Modules: meta.isFeatureModule = true
+    // - Work Packages (Project Work items): items shown in Project Work view
+    //   = items without work_package_id, root items (no parent_id), excluding feature modules
+    const { data: projectItems = [] } = useQuery({
+        queryKey: ['projectItems', projectId, 'forTree', 'v3'],
+        queryFn: async () => {
+            if (!projectId) return [];
+
+            // Fetch all confirmed items
+            const { data: itemsData } = await apiClient.getItems(projectId);
+            const allConfirmedItems = (itemsData || []).filter(item =>
+                item.status !== 'suggestion'
+            );
+
+            // Feature modules (explicitly flagged)
+            const featureModules = allConfirmedItems.filter(item => item.meta?.isFeatureModule === true);
+            const featureModuleIds = new Set(featureModules.map(f => f.id));
+
+            // Project Work items: match ProjectWorkView's "uncategorized" + "wbsRootItems" logic
+            // 1. No work_package_id (uncategorized)
+            // 2. No parent_id (root items)
+            // 3. Not a feature module
+            const projectWorkRoots = allConfirmedItems.filter(item =>
+                !item.work_package_id &&
+                !item.parent_id &&
+                !item.meta?.isFeatureModule &&
+                !featureModuleIds.has(item.id)
+            );
+
+            // Mark them with isWorkPackage for tree building
+            const markedProjectWorkRoots = projectWorkRoots.map(item => ({
+                ...item,
+                meta: { ...item.meta, isWorkPackage: true }
+            }));
+
+            // Find all descendant items recursively
+            const findDescendants = (parentIds: Set<string>, type: 'feature' | 'work'): Item[] => {
+                const children = allConfirmedItems.filter(item =>
+                    item.parent_id && parentIds.has(item.parent_id)
+                );
+                if (children.length === 0) return [];
+                // Mark with appropriate type
+                const marked = children.map(c => ({
+                    ...c,
+                    meta: {
+                        ...c.meta,
+                        isFeatureModule: type === 'feature' ? true : undefined,
+                        isWorkPackage: type === 'work' ? true : undefined
+                    }
+                }));
+                const childIds = new Set(children.map(c => c.id));
+                return [...marked, ...findDescendants(childIds, type)];
+            };
+
+            const featureDescendants = findDescendants(new Set(featureModules.map(f => f.id)), 'feature');
+            const workDescendants = findDescendants(new Set(markedProjectWorkRoots.map(w => w.id)), 'work');
+
+            return [...featureModules, ...featureDescendants, ...markedProjectWorkRoots, ...workDescendants];
+        },
+        enabled: !!projectId,
+    });
+
     // Fetch Members (for assignment)
     const { data: members = [] } = useQuery({
         queryKey: ['members', projectId],
@@ -253,6 +317,7 @@ export const useInbox = () => {
 
     return {
         items,
+        projectItems, // For tree selector
         members,
         isLoading: isLoadingItems,
         selectedIds,

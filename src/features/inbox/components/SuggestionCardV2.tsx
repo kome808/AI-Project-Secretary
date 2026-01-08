@@ -1,19 +1,14 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { CheckCircle2, XCircle, Edit2, FileText, AlertCircle, User, Calendar, TrendingUp, MessageSquare, ChevronDown, ChevronUp, Layers, Briefcase } from 'lucide-react';
-import { Item, ItemType } from '../../../lib/storage/types';
+import { Item } from '../../../lib/storage/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { TargetNodeSelector } from './TargetNodeSelector';
 
 interface SuggestionCardV2Props {
   item: Item;
+  projectItems: Item[]; // All project items for tree building
   isSelected: boolean;
   onToggleSelect: (itemId: string) => void;
   onConfirm: (item: Item) => void;
@@ -22,32 +17,11 @@ interface SuggestionCardV2Props {
   onViewSource: (artifactId: string) => void;
 }
 
-const SUGGESTION_TYPES: Record<ItemType, string> = {
-  action: '待辦',
-  pending: '待回覆',
-  decision: '決議',
-  cr: '變更',
-  // 移除這些類型
-  rule: '規則',
-  issue: '問題',
-  work_package: '專案工作'
-};
 
-const TYPE_COLORS: Record<ItemType, string> = {
-  action: 'bg-blue-500 text-white border-blue-500',
-  pending: 'bg-amber-500 text-white border-amber-500',
-  decision: 'bg-emerald-500 text-white border-emerald-500',
-  cr: 'bg-orange-500 text-white border-orange-500',
-  rule: 'bg-purple-500 text-white border-purple-500',
-  issue: 'bg-red-500 text-white border-red-500',
-  work_package: 'bg-indigo-500 text-white border-indigo-500'
-};
-
-// 只保留四個核心類型用於選擇
-const SELECTABLE_TYPES: ItemType[] = ['action', 'pending', 'decision', 'cr'];
 
 export function SuggestionCardV2({
   item,
+  projectItems,
   isSelected,
   onToggleSelect,
   onConfirm,
@@ -55,13 +29,53 @@ export function SuggestionCardV2({
   onEdit,
   onViewSource
 }: SuggestionCardV2Props) {
-  const [selectedType, setSelectedType] = useState<ItemType>(item.type);
   const [showReasoning, setShowReasoning] = useState(false);
 
+  // Target node selection state
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(
+    item.meta?.target_node_id || null
+  );
+  const [isTodoSelected, setIsTodoSelected] = useState<boolean>(
+    item.type === 'todo'
+  );
+
+  // AI-suggested values from meta
+  const suggestedNodeId = item.meta?.target_node_id || null;
+  const suggestedNodePath = item.meta?.target_node_path || null;
+
   const handleConfirm = () => {
-    const updatedItem = selectedType !== item.type
-      ? { ...item, type: selectedType }
-      : item;
+    let updatedItem = { ...item };
+
+    if (isTodoSelected) {
+      // Todo category - set type to 'todo'
+      updatedItem.type = 'todo';
+      updatedItem.parent_id = undefined;
+      if (updatedItem.meta) {
+        const { isFeatureModule, isWorkPackage, target_node_id, target_node_path, ...rest } = updatedItem.meta;
+        updatedItem.meta = rest;
+      }
+    } else if (selectedNodeId) {
+      // Set parent_id to selected node
+      updatedItem.parent_id = selectedNodeId;
+
+      // Find the target node to determine if it's feature or work_package
+      const targetNode = projectItems.find(i => i.id === selectedNodeId);
+      if (targetNode?.meta?.isFeatureModule) {
+        updatedItem.meta = { ...updatedItem.meta, isFeatureModule: true, isWorkPackage: false };
+        if (item.type === 'todo') updatedItem.type = 'action';
+      } else if (targetNode?.meta?.isWorkPackage) {
+        updatedItem.meta = { ...updatedItem.meta, isWorkPackage: true, isFeatureModule: false };
+        if (item.type === 'todo') updatedItem.type = 'action';
+      }
+    } else {
+      // Uncategorized - clear parent_id and flags
+      updatedItem.parent_id = undefined;
+      if (updatedItem.meta) {
+        const { isFeatureModule, isWorkPackage, target_node_id, target_node_path, ...rest } = updatedItem.meta;
+        updatedItem.meta = rest;
+      }
+    }
+
     onConfirm(updatedItem);
   };
 
@@ -98,34 +112,35 @@ export function SuggestionCardV2({
           aria-label="選取此建議卡"
         />
 
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          {/* 明確標示「建議類型」*/}
+        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+          {/* Tree-based Target Node Selector */}
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-muted-foreground whitespace-nowrap">建議類型：</label>
-            <Select
-              value={SELECTABLE_TYPES.includes(selectedType) ? selectedType : 'action'}
-              onValueChange={(value) => setSelectedType(value as ItemType)}
-            >
-              <SelectTrigger className={`w-auto h-7 gap-2 font-medium ${TYPE_COLORS[selectedType]}`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SELECTABLE_TYPES.map(type => (
-                  <SelectItem key={type} value={type}>
-                    {SUGGESTION_TYPES[type]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <label className="text-xs text-muted-foreground whitespace-nowrap">歸類至：</label>
+            <TargetNodeSelector
+              items={projectItems}
+              selectedNodeId={selectedNodeId}
+              suggestedNodeId={suggestedNodeId}
+              suggestedNodePath={suggestedNodePath}
+              isTodoSelected={isTodoSelected}
+              onSelect={(nodeId, _nodePath, category) => {
+                if (category === 'todo') {
+                  setIsTodoSelected(true);
+                  setSelectedNodeId(null);
+                } else {
+                  setIsTodoSelected(false);
+                  setSelectedNodeId(nodeId);
+                }
+              }}
+            />
           </div>
 
           {/* 風險 Badge for CR */}
-          {selectedType === 'cr' && riskLevel && (
+          {item.type === 'cr' && riskLevel && (
             <Badge
               variant="outline"
               className={`${riskLevel === 'high' ? 'bg-red-50 text-red-700 border-red-200' :
-                  riskLevel === 'medium' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                    'bg-blue-50 text-blue-700 border-blue-200'
+                riskLevel === 'medium' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                  'bg-blue-50 text-blue-700 border-blue-200'
                 }`}
             >
               <label>{riskLevel === 'high' ? '高風險' : riskLevel === 'medium' ? '中風險' : '低風險'}</label>

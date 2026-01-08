@@ -20,6 +20,7 @@ export function InboxPage() {
   const { currentProject } = useProject();
   const {
     items,
+    projectItems,
     members,
     isLoading,
     selectedIds,
@@ -186,6 +187,7 @@ export function InboxPage() {
       ) : (
         <InboxList
           items={items}
+          projectItems={projectItems}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onConfirm={confirmItem}

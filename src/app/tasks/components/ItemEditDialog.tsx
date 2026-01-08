@@ -20,6 +20,7 @@ interface ItemEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (data: Partial<Item>) => Promise<boolean>;
+  mode?: 'create' | 'edit'; // New prop
 }
 
 const STATUS_OPTIONS = [
@@ -36,6 +37,7 @@ export function ItemEditDialog({
   open,
   onOpenChange,
   onSave,
+  mode = 'edit',
 }: ItemEditDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -85,7 +87,7 @@ export function ItemEditDialog({
     const data: Partial<Item> = {
       title: title.trim(),
       description: description.trim(),
-      status,
+      status: status as any,
       assignee_id: assigneeId === 'none' ? undefined : assigneeId,
       due_date: dueDate || undefined,
       notes: notes.trim() || undefined,
@@ -106,10 +108,10 @@ export function ItemEditDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {item ? '編輯任務' : '新增任務'}
+            {mode === 'create' ? '新增任務' : '編輯任務'}
           </DialogTitle>
           <DialogDescription>
-            {item ? '修改任務的詳細資訊' : '在此專案工作下建立新任務'}
+            {mode === 'create' ? '在此專案工作下建立新任務' : '修改任務的詳細資訊'}
           </DialogDescription>
         </DialogHeader>
 

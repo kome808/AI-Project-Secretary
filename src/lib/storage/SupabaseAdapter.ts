@@ -300,7 +300,7 @@ export class SupabaseAdapter implements StorageAdapter {
       const publicAnonKey = localStorage.getItem('supabase_anon_key');
 
       if (!supabaseUrl || !publicAnonKey) {
-        return { data: null, error: new Error('Missing Supabase credentials') };
+        throw new Error('Missing Supabase credentials');
       }
 
       const functionName = 'rag-platform';
@@ -308,6 +308,7 @@ export class SupabaseAdapter implements StorageAdapter {
       const baseUrl = supabaseUrl.replace(/\/$/, '');
       const functionUrl = `${baseUrl}/functions/v1/${functionName}${routePath}`;
 
+      // 1. Try Remote RAG
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
@@ -323,16 +324,107 @@ export class SupabaseAdapter implements StorageAdapter {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        return { data: null, error: new Error(errorData.error || response.statusText) };
+        throw new Error(`RAG Function failed: ${response.statusText}`);
       }
 
       const data = await response.json();
-      return { data: { documents: data.documents }, error: null };
+      let documents = data.documents || [];
+
+      // 🔍 Client-side Validation: Filter out 'Ghost Files' (deleted artifacts)
+      // Since vector store might contain orphans, we must verify against the artifacts table.
+      if (documents.length > 0) {
+        const sourceIds = documents.map((d: any) => d.metadata?.source_id).filter(Boolean);
+        if (sourceIds.length > 0) {
+          const schemaName = getSchemaName();
+          const { data: validArtifacts } = await this.supabase
+            .schema(schemaName)
+            .from('artifacts')
+            .select('id')
+            .in('id', sourceIds);
+
+          const validIdSet = new Set(validArtifacts?.map(a => a.id));
+          documents = documents.filter((d: any) => d.metadata?.source_id && validIdSet.has(d.metadata.source_id));
+        }
+      }
+
+      return { data: { documents }, error: null };
 
     } catch (err) {
-      console.error('❌ [queryKnowledgeBase] Exception:', err);
-      return { data: null, error: err as Error };
+      console.warn('⚠️ [queryKnowledgeBase] Remote RAG failed, falling back to local keyword search:', err);
+
+      // 2. Fallback: Local Keyword Search (Client-side)
+      try {
+        const schemaName = getSchemaName();
+        // Fetch recent artifacts (limit 20 to avoid performance hit)
+        const { data: artifacts, error } = await this.supabase
+          .schema(schemaName)
+          .from('artifacts')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (error || !artifacts) {
+          return { data: { documents: [] }, error: null };
+        }
+
+        const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+
+        let matchedDocs = artifacts.map(artifact => {
+          let score = 0;
+          const content = (artifact.original_content || '').toLowerCase();
+          const title = (artifact.meta?.file_name || artifact.id).toLowerCase();
+
+          // Basic scoring
+          keywords.forEach(keyword => {
+            if (content.includes(keyword)) score += 2;
+            if (title.includes(keyword)) score += 5;
+          });
+
+          // Recent boost
+          const ageHours = (Date.now() - new Date(artifact.created_at).getTime()) / (1000 * 60 * 60);
+          if (ageHours < 24) score += 1;
+
+          return {
+            id: artifact.id,
+            content: artifact.original_content || '[Binary File]',
+            metadata: {
+              title: artifact.meta?.file_name || 'Untitled',
+              source_id: artifact.id,
+              type: artifact.content_type,
+              created_at: artifact.created_at
+            },
+            similarity: score
+          };
+        });
+
+        // Filter and sort
+        matchedDocs = matchedDocs.filter(d => d.similarity > 0);
+
+        // If still no matches, just return valid recent text files (context fallback)
+        if (matchedDocs.length === 0) {
+          matchedDocs = artifacts
+            .filter(a => a.content_type?.startsWith('text/') || !a.content_type)
+            .map(artifact => ({
+              id: artifact.id,
+              content: artifact.original_content || '[Binary File]',
+              metadata: {
+                title: artifact.meta?.file_name || 'Untitled',
+                source_id: artifact.id,
+                type: artifact.content_type,
+                created_at: artifact.created_at
+              },
+              similarity: 0.1
+            }));
+        }
+
+        matchedDocs.sort((a, b) => b.similarity - a.similarity);
+        return { data: { documents: matchedDocs.slice(0, matchCount) }, error: null };
+
+      } catch (fallbackErr) {
+        console.error('❌ [queryKnowledgeBase] Fallback failed:', fallbackErr);
+        return { data: { documents: [] }, error: null };
+      }
     }
   }
 
@@ -1288,6 +1380,32 @@ export class SupabaseAdapter implements StorageAdapter {
     try {
       const schemaName = getSchemaName();
 
+      // 1. Fetch artifact to get storage_path
+      const { data: artifact, error: fetchError } = await this.supabase
+        .schema(schemaName)
+        .from('artifacts')
+        .select('storage_path')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) {
+        console.warn('⚠️ Query artifact failed before deletion, continuing to delete record:', fetchError);
+      }
+
+      // 2. Delete file from Storage bucket if exists
+      if (artifact?.storage_path) {
+        console.log('🗑️ Deleting file from bucket:', artifact.storage_path);
+        const { error: storageError } = await this.supabase.storage
+          .from('aiproject-files')
+          .remove([artifact.storage_path]);
+
+        if (storageError) {
+          console.error('❌ Failed to delete file from storage bucket:', storageError);
+          // Don't block record deletion, just warn
+        }
+      }
+
+      // 3. Delete record from DB
       const { error } = await this.supabase
         .schema(schemaName)
         .from('artifacts')
@@ -1296,7 +1414,7 @@ export class SupabaseAdapter implements StorageAdapter {
 
       if (error) {
         console.error('❌ Supabase deleteArtifact 錯誤:', error);
-        return { data: null, error };
+        return { data: null, error: new Error(error.message) };
       }
 
       console.log('✅ Supabase deleteArtifact 成功:', id);
@@ -1674,35 +1792,11 @@ export class SupabaseAdapter implements StorageAdapter {
     throw new Error('Method not implemented.');
   }
 
+  // 🔥 DEPRECATED: 舊版 work_packages 表已棄用，改用 items 表中的 isWorkPackage 項目
   async getWorkPackages(projectId: string): Promise<StorageResponse<WorkPackage[]>> {
-    try {
-      const schemaName = getSchemaName();
-
-      // 檢查是否為 Local Phase ID
-      const isLocalId = !projectId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-
-      let query = this.supabase
-        .schema(schemaName)
-        .from('work_packages')
-        .select('*');
-
-      // 如果不是 Local Phase ID，才進行 project_id 過濾
-      if (!isLocalId) {
-        query = query.eq('project_id', projectId);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Supabase getWorkPackages error:', error);
-        return { data: null, error: new Error(error.message) };
-      }
-
-      return { data: data || [], error: null };
-    } catch (err) {
-      console.error('getWorkPackages exception:', err);
-      return { data: null, error: err as Error };
-    }
+    // Return empty array to deprecate old table
+    console.warn('[DEPRECATED] getWorkPackages: This method is deprecated. Use items with meta.isWorkPackage instead.');
+    return { data: [], error: null };
   }
 
   async createWorkPackage(workPackage: Omit<WorkPackage, 'id' | 'created_at' | 'updated_at'>): Promise<StorageResponse<WorkPackage>> {

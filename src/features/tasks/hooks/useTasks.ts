@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api/client';
 import { getStorageClient } from '@/lib/storage';
 import { Item, Member } from '@/lib/storage/types';
 
-export type ViewType = 'actions' | 'work' | 'features';
+export type ViewType = 'actions' | 'todos' | 'work' | 'features';
 
 export const useTasks = () => {
     const projectId = useProjectStore((state) => state.currentProjectId);
@@ -19,12 +19,12 @@ export const useTasks = () => {
 
     const [currentView, setCurrentView] = useState<ViewType>(() => {
         // 1. URL
-        if (viewParam && ['actions', 'work', 'features'].includes(viewParam)) return viewParam;
+        if (viewParam && ['actions', 'todos', 'work', 'features'].includes(viewParam)) return viewParam;
 
         // 2. Storage
         if (projectId) {
             const saved = localStorage.getItem(`tasks_view_${projectId}`);
-            if (saved && ['actions', 'work', 'features'].includes(saved)) return saved as ViewType;
+            if (saved && ['actions', 'todos', 'work', 'features'].includes(saved)) return saved as ViewType;
         }
 
         // 3. Default by Role

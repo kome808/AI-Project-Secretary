@@ -6,7 +6,7 @@ import { Artifact, ArtifactType, Item } from '@/lib/storage/types';
 import { DocumentFilters } from './DocumentFilters';
 import { DocumentCard } from './DocumentCard';
 import { DocumentDetail } from './DocumentDetail';
-import { FileSearch, Plus, Link as LinkIcon, AlignLeft, AlertCircle, MessagesSquare, Clock, Hash, Trash2, Upload } from 'lucide-react';
+import { FileSearch, Plus, Link as LinkIcon, AlignLeft, AlertCircle, MessagesSquare, Clock, Hash, Trash2, Upload, Database, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -85,7 +85,8 @@ export function DocumentsPage() {
       item.status !== 'suggestion'
     ).length;
 
-    const isManual = a.meta?.is_manual === true;
+    const isManual = a.meta?.is_manual === true ||
+      ['upload', 'paste', 'link'].includes(a.meta?.channel || '');
     const isSystemUsed = confirmedUsageCount > 0;
 
     // 如果不是手動匯入，且沒有被正式引用，則完全隱藏
@@ -124,6 +125,39 @@ export function DocumentsPage() {
   };
 
   const [isCleaning, setIsCleaning] = useState(false);
+  const [isPruning, setIsPruning] = useState(false);
+
+  const handlePruneStorage = async () => {
+    if (!currentProject) return;
+    if (!confirm('確定要掃描並清理「孤兒檔案」嗎？\n這將會比對資料庫與雲端硬碟，刪除那些資料庫已無記錄但硬碟中仍存在的殘留檔案。')) {
+      return;
+    }
+
+    setIsPruning(true);
+    try {
+      const storage = getStorageClient();
+      if (!storage.pruneOrphanedFiles) {
+        toast.info('此環境不支援儲存空間清理');
+        return;
+      }
+
+      const { data, error } = await storage.pruneOrphanedFiles(currentProject.id);
+
+      if (error) throw error;
+
+      const count = data?.deletedCount || 0;
+      if (count > 0) {
+        toast.success(`清理完成：已移除 ${count} 個孤兒檔案`);
+      } else {
+        toast.info('掃描完成：沒有發現孤兒檔案');
+      }
+    } catch (error) {
+      console.error('Prune failed:', error);
+      toast.error('清理過程中發生錯誤');
+    } finally {
+      setIsPruning(false);
+    }
+  };
 
   const handleCleanup = async () => {
     if (!currentProject) return;
@@ -135,7 +169,8 @@ export function DocumentsPage() {
         item.status !== 'suggestion'
       ).length;
 
-      const isManual = a.meta?.is_manual === true;
+      const isManual = a.meta?.is_manual === true ||
+        ['upload', 'paste', 'link'].includes(a.meta?.channel || '');
       const isSystemUsed = confirmedUsageCount > 0;
 
       return !isManual && !isSystemUsed;
@@ -258,10 +293,10 @@ export function DocumentsPage() {
   if (!currentProject) return null;
 
   return (
-    <div className="space-y-6 border-2 border-red-500 p-4">
+    <div className="space-y-6 p-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <h1 className="flex items-center gap-2">
               文件庫
             </h1>
@@ -281,6 +316,16 @@ export function DocumentsPage() {
                 const isManual = a.meta?.is_manual === true;
                 return !isManual && confirmedUsageCount === 0;
               }).length})
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePruneStorage}
+              disabled={isPruning}
+              className="h-7 text-xs px-2 border-dashed text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 ml-2"
+            >
+              {isPruning ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Database className="h-3 w-3 mr-1" />}
+              深度清理
             </Button>
           </div>
           <p className="text-muted-foreground mt-1 text-sm">管理專案來源資料、證據回溯與敏感資訊遮罩</p>
@@ -386,7 +431,10 @@ export function DocumentsPage() {
                 variant={newType === 'file' ? 'secondary' : 'ghost'}
                 size="sm"
                 className="flex-1 gap-2 h-8 min-w-[80px]"
-                onClick={() => setNewType('file')}
+                onClick={() => {
+                  setNewType('file');
+                  setNewChannel('upload');
+                }}
               >
                 <Upload className="h-4 w-4" />
                 檔案
