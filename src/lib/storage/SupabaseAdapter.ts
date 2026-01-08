@@ -351,7 +351,8 @@ export class SupabaseAdapter implements StorageAdapter {
             .schema(schemaName)
             .from('artifacts')
             .select('id')
-            .in('id', sourceIds);
+            .in('id', sourceIds)
+            .eq('archived', false);
 
           const validIdSet = new Set(validArtifacts?.map(a => a.id));
           documents = documents.filter((d: any) => d.metadata?.source_id && validIdSet.has(d.metadata.source_id));
