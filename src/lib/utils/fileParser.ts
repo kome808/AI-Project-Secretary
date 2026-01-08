@@ -3,10 +3,11 @@ import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 
-// Initialize PDF Worker
-const pdfjsVersion = pdfjsLib.version;
-const workerVersion = pdfjsVersion || '3.11.174';
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${workerVersion}/build/pdf.worker.min.js`;
+// Initialize PDF Worker using Vite's URL import
+// This avoids CORS issues and version mismatches by serving the worker locally
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 /**
  * Extract text from various file formats
@@ -33,6 +34,7 @@ export const FileParser = {
             return fullText.trim();
         } catch (error) {
             console.error('PDF Parse Error:', error);
+            // Re-throw to let the caller handle the fallback
             throw new Error('無法讀取 PDF 內容');
         }
     },
