@@ -1407,11 +1407,21 @@ export class SupabaseAdapter implements StorageAdapter {
       const schemaName = getSchemaName();
       console.log(`🔍 Scanning artifacts in schema '${schemaName}' with pattern: '${pattern}'`);
 
-      const { data, error } = await this.supabase
+      // Determine if pattern is a UUID
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pattern);
+
+      let query = this.supabase
         .schema(schemaName)
         .from('artifacts')
-        .select('id, created_at, project_id, archived, meta, content_type, original_content')
-        .or(`meta->>file_name.ilike.%${pattern}%, original_content.ilike.%${pattern}%, id::text.ilike.%${pattern}%`)
+        .select('id, created_at, project_id, archived, meta, content_type, original_content');
+
+      if (isUUID) {
+        query = query.eq('id', pattern);
+      } else {
+        query = query.or(`meta->>file_name.ilike.%${pattern}%, original_content.ilike.%${pattern}%`);
+      }
+
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(50);
 
