@@ -4,13 +4,14 @@
  */
 
 // 意圖類型
-export type IntentType = 
+export type IntentType =
   | 'chat'              // 一般對話
   | 'create_task'       // 建立任務
   | 'plan_tasks'        // 規劃多個任務
   | 'record_decision'   // 記錄決議
   | 'mark_pending'      // 標記待回覆
   | 'change_request'    // 需求變更
+  | 'search'            // 搜尋知識庫
   | 'ambiguous';        // 意圖不明確
 
 // 意圖分類結果
@@ -30,21 +31,21 @@ export interface ExtractedInfo {
   due_date?: string; // ISO 8601 或相對時間（如 "tomorrow"）
   assignee?: string; // 成員名稱或 email
   priority?: 'low' | 'medium' | 'high';
-  
+
   // 決議相關
   category?: 'technical' | 'business' | 'design' | 'other';
   scope?: 'global' | 'module' | 'page';
-  
+
   // 待回覆相關
   waiting_on_type?: 'client' | 'team_member' | 'external_vendor' | 'other';
   waiting_on_name?: string;
   expected_response?: string;
-  
+
   // 需求變更相關
   change_target?: string; // 要變更的目標（模組、頁面、功能）
   change_type?: 'add' | 'modify' | 'remove';
   change_reason?: string;
-  
+
   // 通用
   tags?: string[];
   artifact_reference?: string; // 引用的 Artifact ID

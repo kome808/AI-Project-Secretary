@@ -254,6 +254,26 @@ export const INTENT_CLASSIFICATION_EXAMPLES: IntentExample[] = [
     extracted_info: {}
   },
 
+  // 搜尋知識庫 (search)
+  {
+    input: '幫我找關於RAG的文件',
+    intent: 'search',
+    confidence: 0.95,
+    extracted_info: {}
+  },
+  {
+    input: '查詢 12/4 會議記錄',
+    intent: 'search',
+    confidence: 0.95,
+    extracted_info: {}
+  },
+  {
+    input: '檢索功能需求清單',
+    intent: 'search',
+    confidence: 0.95,
+    extracted_info: {}
+  },
+
   // 意圖不明確 (ambiguous)
   {
     input: '記得這個',
@@ -330,7 +350,14 @@ ${SYSTEM_PROMPT_TEMPLATE.principles.map((p, i) => `${i + 1}. ${p}`).join('\n')}
    - 變更內容：針對已存在功能的修改
    - **關鍵字：改、調整、移除、取消、修改**
 
-6. **ambiguous（意圖不明確）** - 當輸入過於簡短或含糊時：
+  // 關鍵字：改、調整、移除、取消、修改
+
+7. **search（搜尋知識庫）** - 當使用者希望能從專案資料或歷史紀錄中尋找解答時：
+   - 查詢指令：「搜尋...」「查詢...」「找...」「檢索...」等
+   - 詢問客觀事實：「上次會議說了什麼？」「規格書在哪？」等
+   - **關鍵字：搜尋、查詢、找、檢索、查一下、詢問**
+
+8. **ambiguous（意圖不明確）** - 當輸入過於簡短或含糊時：
    - 「這個」「那個」「處理一下」等
    - 缺乏具體資訊無法判斷
    - **注意：長篇文字不應判定為 ambiguous，請優先嘗試識別為 create_task**
@@ -338,7 +365,7 @@ ${SYSTEM_PROMPT_TEMPLATE.principles.map((p, i) => `${i + 1}. ${p}`).join('\n')}
 **回應格式要求：**
 你必須以 JSON 格式回應，包含以下欄位：
 {
-  "intent": "chat | create_task | record_decision | mark_pending | change_request | ambiguous",
+  "intent": "chat | create_task | record_decision | mark_pending | change_request | search | ambiguous",
   "confidence": 0.0~1.0,
   "reasoning": "你的判斷理由（必須說明為什麼選擇這個意圖）",
   "extracted_info": {
@@ -478,6 +505,7 @@ export const INTENT_DISPLAY_NAMES: Record<string, string> = {
   record_decision: '記錄決議',
   mark_pending: '標記待回覆',
   change_request: '需求變更',
+  search: '搜尋知識庫',
   ambiguous: '意圖不明確'
 };
 
