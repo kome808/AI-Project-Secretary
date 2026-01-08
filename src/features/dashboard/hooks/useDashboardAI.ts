@@ -949,12 +949,12 @@ ${analysis.reasoning || ''}
                     let references: any[] = [];
 
                     try {
-                        console.log('🔍 [AI Chat Debug] Querying Knowledge Base...', { query: input, projectId: currentProject.id });
+                        // console.log('🔍 [AI Chat Debug] Querying Knowledge Base...', { query: input, projectId: currentProject.id });
 
                         // Lower threshold to 0.3 for debugging
                         const searchRes = await storage.queryKnowledgeBase(input || '', currentProject.id, 0.3);
 
-                        console.log('🔍 [AI Chat Debug] Search Result:', searchRes);
+                        // console.log('🔍 [AI Chat Debug] Search Result:', searchRes);
 
                         if (searchRes.data && searchRes.data.documents && searchRes.data.documents.length > 0) {
                             references = searchRes.data.documents;
@@ -966,10 +966,10 @@ ${analysis.reasoning || ''}
 【參考知識庫內容】：
 ${validDocs.map((doc, i) => `文件 ${i + 1}: ${doc.content.substring(0, 500)}... (來源: ${doc.metadata?.fileName || '未知'})`).join('\n\n')}
 `;
-                                console.log('✅ [AI Chat Debug] Found relevant docs:', validDocs.length);
+                                // console.log('✅ [AI Chat Debug] Found relevant docs:', validDocs.length);
                             }
                         } else {
-                            console.warn('⚠️ [AI Chat Debug] No relevant documents found (empty result).');
+                            // console.warn('⚠️ [AI Chat Debug] No relevant documents found (empty result).');
                         }
                     } catch (e) {
                         console.error('❌ [AI Chat Debug] RAG Search failed:', e);
