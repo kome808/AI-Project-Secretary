@@ -1015,10 +1015,16 @@ ${validDocs.map((doc, i) => {
                                     return `文件 ${i + 1}: ${doc.content.substring(0, 500)}... (來源: ${sourceLink})`;
                                 }).join('\n\n')}
 `;
-                                console.log('✅ [AI Chat Debug] RAG Context Generated:', validDocs.map(d => d.metadata?.fileName));
+                                console.log('✅ [AI Chat Debug V2] RAG Context Generated:',
+                                    validDocs.map(d => ({
+                                        file: d.metadata?.fileName,
+                                        id: d.metadata?.source_id,
+                                        content_preview: d.content?.substring(0, 20)
+                                    }))
+                                );
                             }
                         } else {
-                            // console.warn('⚠️ [AI Chat Debug] No relevant documents found (empty result).');
+                            console.warn('⚠️ [AI Chat Debug V2] No relevant documents found (empty result).');
                         }
                     } catch (e) {
                         console.error('❌ [AI Chat Debug] RAG Search failed:', e);
