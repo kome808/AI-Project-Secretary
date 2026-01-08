@@ -347,15 +347,28 @@ export class SupabaseAdapter implements StorageAdapter {
         const sourceIds = documents.map((d: any) => d.metadata?.source_id).filter(Boolean);
         if (sourceIds.length > 0) {
           const schemaName = getSchemaName();
+          // 🔥 strict validation: check id AND project_id AND archived=false
           const { data: validArtifacts } = await this.supabase
             .schema(schemaName)
             .from('artifacts')
-            .select('id')
+            .select('id, meta, original_content') // Select more to debug
             .in('id', sourceIds)
+            .eq('project_id', projectId) // Filter by project
             .eq('archived', false);
+
+          console.log('[RAG] Valid Artifacts Found in DB:', validArtifacts?.length, validArtifacts?.map(a => a.id));
 
           const validIdSet = new Set(validArtifacts?.map(a => a.id));
           documents = documents.filter((d: any) => d.metadata?.source_id && validIdSet.has(d.metadata.source_id));
+
+          // 🧹 Deduplication: Remove identical chunks (same content)
+          const seenContent = new Set();
+          documents = documents.filter((d: any) => {
+            const contentSig = d.pageContent?.trim() || '';
+            if (seenContent.has(contentSig)) return false;
+            seenContent.add(contentSig);
+            return true;
+          });
         }
       }
 
