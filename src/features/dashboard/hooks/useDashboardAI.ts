@@ -990,16 +990,32 @@ ${analysis.reasoning || ''}
                         // console.log('🔍 [AI Chat Debug] Search Result:', searchRes);
 
                         if (searchRes.data && searchRes.data.documents && searchRes.data.documents.length > 0) {
-                            references = searchRes.data.documents;
-                            // 只取前 3 個最相關的結果，避免 Prompt 過長
-                            const validDocs = references.slice(0, 3);
+                            const rawDocs = searchRes.data.documents;
+
+                            // 🔍 Deduplicate by content (Safety Net)
+                            const seenContent = new Set();
+                            references = rawDocs.filter((doc: any) => {
+                                const sig = (doc.content || '').trim();
+                                if (seenContent.has(sig)) return false;
+                                seenContent.add(sig);
+                                return true;
+                            });
+
+                            // 取前 5 個最相關的結果
+                            const validDocs = references.slice(0, 5);
 
                             if (validDocs.length > 0) {
                                 knowledgeContext = `
 【參考知識庫內容】：
-${validDocs.map((doc, i) => `文件 ${i + 1}: ${doc.content.substring(0, 500)}... (來源: ${doc.metadata?.fileName || '未知'})`).join('\n\n')}
+${validDocs.map((doc, i) => {
+                                    const fileName = doc.metadata?.fileName || '未知文件';
+                                    const sourceId = doc.metadata?.source_id;
+                                    // Generate Markdown Link for clickable source
+                                    const sourceLink = sourceId ? `[${fileName}](#/sources?id=${sourceId})` : fileName;
+                                    return `文件 ${i + 1}: ${doc.content.substring(0, 500)}... (來源: ${sourceLink})`;
+                                }).join('\n\n')}
 `;
-                                // console.log('✅ [AI Chat Debug] Found relevant docs:', validDocs.length);
+                                console.log('✅ [AI Chat Debug] RAG Context Generated:', validDocs.map(d => d.metadata?.fileName));
                             }
                         } else {
                             // console.warn('⚠️ [AI Chat Debug] No relevant documents found (empty result).');
