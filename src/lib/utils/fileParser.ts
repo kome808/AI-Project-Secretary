@@ -3,11 +3,9 @@ import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 
-// Initialize PDF Worker using Vite's URL import
-// This avoids CORS issues and version mismatches by serving the worker locally
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+// Initialize PDF Worker
+// Point to the file copied to public/ folder to avoid bundler issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 /**
  * Extract text from various file formats

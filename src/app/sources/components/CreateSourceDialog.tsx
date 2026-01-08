@@ -259,18 +259,43 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
       // 🔥 Trigger RAG Embedding
       toast.loading('正在建立 RAG 索引...', { id: 'embed' });
       try {
-        await storage.embedContent(
-          finalContent,
-          data.id,
-          'artifact',
-          currentProject.id,
-          {
-            ...data.meta,
-            storage_path: storagePath, // Ensure storage_path is passed for file parsing
-            file_url: fileUrl
-          }
-        );
+        const MAX_CHUNK_SIZE = 8000; // chars (~2000-3000 tokens), safe for small model
+        const OVERLAP = 500;
+
+        let contentToEmbed = finalContent;
+        if (!contentToEmbed || contentToEmbed.length === 0) {
+          contentToEmbed = data.meta?.file_name || 'Untitled Artifact';
+        }
+
+        // Simple chunking
+        const chunks = [];
+        for (let i = 0; i < contentToEmbed.length; i += (MAX_CHUNK_SIZE - OVERLAP)) {
+          let end = Math.min(i + MAX_CHUNK_SIZE, contentToEmbed.length);
+          chunks.push(contentToEmbed.substring(i, end));
+          if (end === contentToEmbed.length) break;
+        }
+
+        console.log(`[RAG] Chunking content into ${chunks.length} parts`);
+
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          await storage.embedContent(
+            chunk,
+            data.id,
+            'artifact',
+            currentProject.id,
+            {
+              ...data.meta,
+              storage_path: storagePath,
+              chunk_index: i,
+              total_chunks: chunks.length,
+              file_url: fileUrl
+            }
+          );
+        }
+
         toast.dismiss('embed');
+        toast.success(`索引建立完成 (共 ${chunks.length} 個區塊)`);
       } catch (embedError) {
         console.error('Embedding failed (background):', embedError);
         // Don't fail the UI, just warn
