@@ -5,6 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Shield, Users, Code, Palette, UserCircle, User, ChevronDown } from 'lucide-react';
 import { DevUserSwitcher } from '@/lib/permissions/devTools';
 import { toast } from 'sonner';
+import { LogOut } from 'lucide-react';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { clearCurrentUser } from '@/lib/permissions/statusPermissions';
 
 export function CurrentUserBadge() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -70,6 +73,26 @@ export function CurrentUserBadge() {
     setTimeout(() => {
       window.location.reload();
     }, 500);
+  };
+
+  const handleLogout = async () => {
+    try {
+      // 1. Clear Supabase Session
+      const supabase = getSupabaseClient();
+      await supabase.auth.signOut();
+
+      // 2. Clear Local Storage User
+      clearCurrentUser();
+
+      toast.success('已登出');
+      setIsMenuOpen(false);
+
+      // 3. Reload to force Auth Guard check
+      window.location.reload();
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('登出失敗');
+    }
   };
 
   const roleConfig = {
@@ -188,10 +211,21 @@ export function CurrentUserBadge() {
                   )}
                 </button>
               );
-            })}
+            </div>
+
+          <div className="p-2 border-t border-border mt-1">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-2 py-2 rounded-[var(--radius)] text-left transition-colors hover:bg-red-50 text-red-600 cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="text-sm">登出系統</span>
+            </button>
           </div>
         </div>
-      )}
-    </div>
+        </div>
+  )
+}
+    </div >
   );
 }
