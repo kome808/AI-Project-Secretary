@@ -943,6 +943,39 @@ ${analysis.reasoning || ''}
                 const { data: aiConfig } = await storage.getSystemAIConfig();
 
                 if (aiConfig && aiConfig.is_active) {
+                    const aiService = createAIService({
+                        provider: aiConfig.provider as any,
+                        model: aiConfig.model,
+                        apiKey: aiConfig.api_key,
+                        maxTokens: 8000
+                    });
+
+                    // 🧠 Intent Classification (Smart Check)
+                    setStatusMessage('正在分析意圖...');
+                    let intentResult;
+                    try {
+                        intentResult = await aiService.classifyIntent(input || '', {
+                            projectName: currentProject.name
+                        });
+
+                        // 若意圖不明確或信心度過低，直接回覆請求確認（跳過 RAG）
+                        if (intentResult.intent === 'ambiguous' || intentResult.confidence < 0.6) {
+                            console.log('🤔 Ambiguous Intent:', intentResult);
+                            addMessage({
+                                id: crypto.randomUUID(),
+                                role: 'ai',
+                                content: intentResult.reply || '不好意思，我不太確定您的意思，能否多提供一點細節？',
+                                timestamp: new Date().toISOString()
+                            });
+                            setStatus('ready');
+                            setPendingFile(null);
+                            return;
+                        }
+                    } catch (err) {
+                        console.warn('Intent classification failed, falling back to direct RAG:', err);
+                        // Fallback continue...
+                    }
+
                     // 🔥 RAG Retrieval: Search Knowledge Base
                     setStatusMessage('正在搜尋專案知識庫...');
                     let knowledgeContext = '';
@@ -977,13 +1010,6 @@ ${validDocs.map((doc, i) => `文件 ${i + 1}: ${doc.content.substring(0, 500)}..
 
                     setStatusMessage('AI 正在思考...');
 
-                    const aiService = createAIService({
-                        provider: aiConfig.provider as any,
-                        model: aiConfig.model,
-                        apiKey: aiConfig.api_key,
-                        maxTokens: 8000
-                    });
-
                     // Build Context from Items - limit to 10 most recent tasks for performance
                     const limitedItems = items?.slice(0, 10) || [];
                     const taskSummary = limitedItems.length > 0
@@ -996,6 +1022,8 @@ ${validDocs.map((doc, i) => `文件 ${i + 1}: ${doc.content.substring(0, 500)}..
 ${taskSummary}${taskCountNote}
 
 ${knowledgeContext ? knowledgeContext : ''}
+
+使用者意圖判斷：${intentResult ? `${intentResult.intent} (信心度: ${intentResult.confidence})` : '未判斷'}
 
 請根據以上資訊簡潔回答使用者的問題。${knowledgeContext ? `回答時請務必並優先參考上述【參考知識庫內容】中的資訊來回答，並在回答中明確指出引用的文件名稱。` : '如果資訊不足，請禮貌告知。'}
 注意：請以繁體中文自然語言回答，不要使用 JSON 格式。回答請盡量精簡。`;
