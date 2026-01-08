@@ -443,7 +443,7 @@ function MaintenancePanel() {
 
     try {
       // Direct raw query to find "Ghost" files, ignoring standard filters
-      const { data, error } = await adapter.supabase
+      const { data, error } = await (adapter as any).supabase
         .from('artifacts')
         .select('id, created_at, project_id, archived, meta, content_type')
         // Try matching filename in meta (common pattern) or original_content fallback
@@ -544,3 +544,5 @@ function MaintenancePanel() {
         )}
       </CardContent>
     </Card>
+  );
+}
