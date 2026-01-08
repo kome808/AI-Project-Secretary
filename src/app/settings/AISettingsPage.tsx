@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle2, Loader2, Info } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, Info, Database } from 'lucide-react';
 import { SystemAIConfig, AIProvider } from '../../lib/storage/types';
 import { toast } from 'sonner';
 import { getStorageClient } from '../../lib/storage';
@@ -416,6 +416,131 @@ export function AISettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 知識庫維護工具 (Knowledge Base Maintenance) */}
+      <MaintenancePanel />
     </div>
   );
 }
+
+// 知識庫維護元件
+function MaintenancePanel() {
+  const [scanPattern, setScanPattern] = useState('');
+  const [scanResults, setScanResults] = useState<any[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const adapter = getStorageClient();
+
+  // 掃描文件
+  const handleScan = async () => {
+    if (!scanPattern.trim()) {
+      toast.error('請輸入檔案名稱關鍵字');
+      return;
+    }
+
+    setIsScanning(true);
+    setScanResults([]);
+
+    try {
+      // Direct raw query to find "Ghost" files, ignoring standard filters
+      const { data, error } = await adapter.supabase
+        .from('artifacts')
+        .select('id, created_at, project_id, archived, meta, content_type')
+        // Try matching filename in meta (common pattern) or original_content fallback
+        // Note: ILIKE might be slow for full scans but ok for admin tool
+        .or(`meta->>file_name.ilike.%${scanPattern}%, original_content.ilike.%${scanPattern}%`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        toast.error('掃描失敗: ' + error.message);
+      } else {
+        setScanResults(data || []);
+        if (data?.length === 0) {
+          toast.info('未找到符合關鍵字的文件');
+        } else {
+          toast.success(`找到 ${data?.length} 個相關文件`);
+        }
+      }
+    } catch (err) {
+      console.error('Scan failed:', err);
+      toast.error('掃描發生異常');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // 強制刪除
+  const handleDeleteAll = async () => {
+    if (scanResults.length === 0) return;
+
+    if (!confirm(`警告：即將強制刪除 ${scanResults.length} 個文件資料列。\n這將會清除資料庫記錄（Vectors 也會因此被過濾）。確定要執行嗎？`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      let deletedCount = 0;
+      for (const artifact of scanResults) {
+        const { error } = await adapter.deleteArtifact(artifact.id);
+        if (!error) deletedCount++;
+      }
+
+      toast.success(`清理完成！已刪除 ${deletedCount} 筆記錄`);
+      setScanResults([]); // Verify by scan later
+    } catch (err) {
+      console.error('Delete failed:', err);
+      toast.error('刪除過程發生異常');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <Card className="border-red-100">
+      <CardHeader>
+        <h3 className="text-red-900 flex items-center gap-2">
+          <Database className="w-5 h-5" />
+          知識庫維護 (Ghost File Cleaner)
+        </h3>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          此工具用於強制搜尋並刪除資料庫中的殘留文件記錄（例如已刪除但在 RAG 中仍出現的幽靈文件）。
+        </p>
+
+        <div className="flex gap-2">
+          <Input
+            placeholder="輸入檔案名稱關鍵字 (例如: 1204)"
+            value={scanPattern}
+            onChange={e => setScanPattern(e.target.value)}
+          />
+          <Button onClick={handleScan} disabled={isScanning} variant="secondary">
+            {isScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : '掃描'}
+          </Button>
+        </div>
+
+        {scanResults.length > 0 && (
+          <div className="border rounded-md p-4 bg-muted/30">
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="font-medium">掃描結果 ({scanResults.length})</h4>
+              <Button onClick={handleDeleteAll} disabled={isDeleting} variant="destructive" size="sm">
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : '全部強制刪除'}
+              </Button>
+            </div>
+            <div className="max-h-[200px] overflow-y-auto space-y-2">
+              {scanResults.map(item => (
+                <div key={item.id} className="text-xs p-2 bg-background border rounded flex justify-between items-center">
+                  <div>
+                    <div className="font-medium text-red-700">{item.meta?.file_name || '未命名'}</div>
+                    <div className="opacity-60">ID: {item.id}</div>
+                    <div className="opacity-60">Archived: {item.archived ? 'Yes' : 'No'} | Project: {item.project_id}</div>
+                  </div>
+                  <Badge variant="outline">{item.content_type || 'unknown'}</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
