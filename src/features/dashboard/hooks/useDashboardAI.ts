@@ -1009,22 +1009,18 @@ ${analysis.reasoning || ''}
 【參考知識庫內容】：
 ${validDocs.map((doc, i) => {
                                     const fileName = doc.metadata?.fileName || '未知文件';
-                                    const sourceId = doc.metadata?.source_id;
+                                    const sourceId = doc.metadata?.source_id || doc.metadata?.id;
                                     // Generate Markdown Link for clickable source
                                     const sourceLink = sourceId ? `[${fileName}](#/sources?id=${sourceId})` : fileName;
                                     return `文件 ${i + 1}: ${doc.content.substring(0, 500)}... (來源: ${sourceLink})`;
                                 }).join('\n\n')}
 `;
-                                console.log('✅ [AI Chat Debug V2] RAG Context Generated:',
-                                    validDocs.map(d => ({
-                                        file: d.metadata?.fileName,
-                                        id: d.metadata?.source_id,
-                                        content_preview: d.content?.substring(0, 20)
-                                    }))
+                                console.log('✅ [AI Chat Debug V3] RAG Doc Metadata:',
+                                    JSON.stringify(validDocs.map(d => d.metadata), null, 2)
                                 );
                             }
                         } else {
-                            console.warn('⚠️ [AI Chat Debug V2] No relevant documents found (empty result).');
+                            console.warn('⚠️ [AI Chat Debug V3] No relevant documents found (empty result).');
                         }
                     } catch (e) {
                         console.error('❌ [AI Chat Debug] RAG Search failed:', e);
