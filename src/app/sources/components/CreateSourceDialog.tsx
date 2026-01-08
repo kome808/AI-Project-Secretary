@@ -177,6 +177,24 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
         fileSize = selectedFile.size;
 
         // 檔案與圖片：上傳到 Storage
+
+        // Handle PDF text extraction
+        if (selectedFile.type === 'application/pdf') {
+          toast.loading('正在讀取 PDF 內容...', { id: 'parsing' });
+          try {
+            // Dynamic import to avoid loading pdfjs if not needed
+            const { extractTextFromPDF } = await import('@/lib/utils/pdf');
+            const text = await extractTextFromPDF(selectedFile);
+            finalContent = text || '[PDF File]'; // Fallback if empty
+            toast.dismiss('parsing');
+          } catch (e) {
+            console.error('PDF Parse error:', e);
+            toast.dismiss('parsing');
+            toast.warning('無法讀取 PDF 文字，僅上傳檔案');
+            finalContent = '';
+          }
+        }
+
         if (selectedFile.type.startsWith('application/') || selectedFile.type.startsWith('image/')) {
           toast.loading('上傳檔案中...', { id: 'upload' });
 
@@ -190,7 +208,7 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
           if (uploadResult.data) {
             storagePath = uploadResult.data.storagePath;
             fileUrl = uploadResult.data.fileUrl;
-            finalContent = ''; // 檔案不存 original_content
+            // finalContent is already set by PDF extractor or stays empty for other binaries
 
             toast.dismiss('upload');
             toast.loading('建立文件記錄...', { id: 'create' });
