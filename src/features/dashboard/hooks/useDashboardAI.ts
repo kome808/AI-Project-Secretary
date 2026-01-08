@@ -747,7 +747,7 @@ ${analysis.reasoning || ''}
 
             // 🔥 Step 2: 處理純文字輸入
             const planningKeywords = ['規劃', '幫我安排', '要做什麼', '分解', '拆解', '步驟', '計畫'];
-            const featureModuleKeywords = ['功能模組', '模組清單', '功能列表', '系統功能', '開發清單', '功能需求'];
+            const featureModuleKeywords = ['功能模組', '模組清單', '功能列表', '系統功能', '開發清單'];
             const isPlanningRequest = input ? planningKeywords.some(keyword => input.includes(keyword)) : false;
             const isFeatureModuleRequest = input ? featureModuleKeywords.some(keyword => input.includes(keyword)) : false;
 
