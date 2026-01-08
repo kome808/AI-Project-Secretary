@@ -7,7 +7,18 @@ import type {
   SystemAIConfig,
   SystemPromptConfig,
   ProjectConfig,
-  Member
+  Member,
+  ItemStatus,
+  ItemType,
+  ProjectStatus,
+  Module,
+  Page,
+  Milestone,
+  WorkPackage,
+  WorkActivity,
+  AIProvider,
+  GlobalConfig,
+  ConnectionStatus
 } from './types';
 import { WBS_PARSER_PROMPT, generateSystemPrompt, generateFewShotPrompt, DEFAULT_PROMPT_TEMPLATES } from '../ai/prompts';
 import { getSupabaseClient } from '../supabase/client'; // 使用 Singleton client
