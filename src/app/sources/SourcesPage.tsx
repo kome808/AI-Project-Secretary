@@ -8,13 +8,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
 import { Artifact, Item } from '@/lib/storage/types';
 import { getStorageClient } from '@/lib/storage';
-import { FileText, RefreshCw, Plus, Search, Filter, ChevronLeft, ChevronRight, Trash2, X, Hash, Database, Loader2 } from 'lucide-react';
+import { FileText, RefreshCw, Plus, Search, Filter, ChevronLeft, ChevronRight, Trash2, X, Hash, Database, Loader2, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -209,48 +215,58 @@ export function SourcesPage() {
         </div>
         <div className="flex items-center gap-[var(--spacing-2)]">
           {!selectionMode && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleCleanup}
-              disabled={isCleaning || isLoading}
-              className="mr-2"
-            >
-              {isCleaning ? <Hash className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-              <label>清除無效 ({
-                artifacts.filter(a => {
-                  const strictCount = items.filter(item =>
-                    (item.source_artifact_id === a.id || item.meta?.citation?.artifact_id === a.id) &&
-                    item.status !== 'suggestion'
-                  ).length;
-                  return a.meta?.is_manual !== true && strictCount === 0;
-                }).length
-              })</label>
-            </Button>
-          )}
-          {!selectionMode && duplicateArtifacts.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsRemoveDupConfirmOpen(true)}
-              disabled={isCleaning || isLoading || isRemovingDuplicates}
-              className="mr-2 border-amber-300 text-amber-700 hover:bg-amber-50"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              {isRemovingDuplicates ? '移除中...' : `移除重複 (${duplicateArtifacts.length})`}
-            </Button>
-          )}
-          {!selectionMode && getCurrentUser() && isSystemAdmin(getCurrentUser()!) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePruneStorage}
-              disabled={isPruning || isLoading}
-              className="mr-2 border-dashed text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200"
-            >
-              {isPruning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
-              <label>深度清理</label>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="mr-2 border-dashed">
+                  <Settings className="h-4 w-4 mr-2" />
+                  <label>工具</label>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  onClick={handleCleanup}
+                  disabled={isCleaning || isLoading}
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  <span>清除無效文件</span>
+                  <span className="ml-auto text-xs text-muted-foreground p-1 bg-muted rounded">
+                    {artifacts.filter(a => {
+                      const strictCount = items.filter(item =>
+                        (item.source_artifact_id === a.id || item.meta?.citation?.artifact_id === a.id) &&
+                        item.status !== 'suggestion'
+                      ).length;
+                      return a.meta?.is_manual !== true && strictCount === 0;
+                    }).length}
+                  </span>
+                </DropdownMenuItem>
+
+                {duplicateArtifacts.length > 0 && (
+                  <DropdownMenuItem
+                    onClick={() => setIsRemoveDupConfirmOpen(true)}
+                    disabled={isCleaning || isLoading || isRemovingDuplicates}
+                    className="text-amber-700 focus:text-amber-700 focus:bg-amber-50 cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    <span>移除重複文件</span>
+                    <span className="ml-auto text-xs text-amber-700 bg-amber-100 p-1 rounded">
+                      {duplicateArtifacts.length}
+                    </span>
+                  </DropdownMenuItem>
+                )}
+
+                {getCurrentUser() && isSystemAdmin(getCurrentUser()!) && (
+                  <DropdownMenuItem
+                    onClick={handlePruneStorage}
+                    disabled={isPruning || isLoading}
+                    className="cursor-pointer"
+                  >
+                    <Database className="h-4 w-4 mr-2" />
+                    <span>深度清理儲存空間</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           {!selectionMode ? (
             <>
