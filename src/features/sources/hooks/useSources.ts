@@ -118,6 +118,33 @@ export const useSources = () => {
     no_usage: artifacts.filter(a => getCitationCount(a.id) === 0).length,
   }), [artifacts, items]);
 
+  // Detect duplicate artifacts by storage_path, file_name, or content hash
+  const duplicateArtifacts = useMemo(() => {
+    const seen = new Map<string, Artifact>();
+    const duplicates: Artifact[] = [];
+
+    artifacts.forEach(a => {
+      // Build a unique key based on storage_path or original_content (first 500 chars) + file_name
+      const fileName = a.meta?.file_name || '';
+      const contentKey = a.storage_path || (a.original_content?.slice(0, 500) + fileName);
+
+      if (contentKey && seen.has(contentKey)) {
+        // This is a duplicate - keep the older one, mark this as duplicate
+        const existing = seen.get(contentKey)!;
+        if (new Date(a.created_at) > new Date(existing.created_at)) {
+          duplicates.push(a); // Newer one is duplicate
+        } else {
+          duplicates.push(existing);
+          seen.set(contentKey, a); // Replace with older one
+        }
+      } else if (contentKey) {
+        seen.set(contentKey, a);
+      }
+    });
+
+    return duplicates;
+  }, [artifacts]);
+
   // --- Actions ---
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -170,6 +197,35 @@ export const useSources = () => {
     queryClient.invalidateQueries({ queryKey: ['items', projectId] });
   };
 
+  const removeDuplicates = async () => {
+    if (duplicateArtifacts.length === 0) {
+      toast.info('沒有發現重複的文件');
+      return 0;
+    }
+
+    const storage = getStorageClient();
+    let deletedCount = 0;
+
+    try {
+      await Promise.all(
+        duplicateArtifacts.map(async (a) => {
+          const { error } = await storage.deleteArtifact(a.id);
+          if (!error) deletedCount++;
+        })
+      );
+
+      if (deletedCount > 0) {
+        toast.success(`已移除 ${deletedCount} 個重複文件`);
+        refresh();
+      }
+      return deletedCount;
+    } catch (error) {
+      console.error('Remove duplicates failed:', error);
+      toast.error('移除重複文件失敗');
+      return 0;
+    }
+  };
+
   return {
     artifacts,
     items,
@@ -194,6 +250,8 @@ export const useSources = () => {
     batchDelete,
     isDeleting,
     getCitationCount,
-    refresh
+    refresh,
+    duplicateArtifacts,
+    removeDuplicates
   };
 };

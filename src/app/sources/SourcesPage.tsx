@@ -54,7 +54,9 @@ export function SourcesPage() {
     isDeleting,
     getCitationCount,
     refresh,
-    items // needed for detail panel
+    items, // needed for detail panel
+    duplicateArtifacts,
+    removeDuplicates
   } = useSources();
 
   // Local UI State
@@ -222,6 +224,22 @@ export function SourcesPage() {
                   return a.meta?.is_manual !== true && strictCount === 0;
                 }).length
               })</label>
+            </Button>
+          )}
+          {!selectionMode && duplicateArtifacts.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (confirm(`確定要移除 ${duplicateArtifacts.length} 個重複的文件嗎？\n將保留較早建立的版本。`)) {
+                  removeDuplicates();
+                }
+              }}
+              disabled={isCleaning || isLoading}
+              className="mr-2 border-amber-300 text-amber-700 hover:bg-amber-50"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              移除重複 ({duplicateArtifacts.length})
             </Button>
           )}
           {!selectionMode && getCurrentUser() && isSystemAdmin(getCurrentUser()!) && (
