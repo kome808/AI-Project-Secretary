@@ -1029,7 +1029,7 @@ ${analysis.reasoning || ''}
                                     const fileName = doc.metadata?.file_name || doc.metadata?.fileName || doc.metadata?.title || '未知文件';
                                     const sourceId = doc.metadata?.source_id || doc.metadata?.id;
                                     // Link to document detail page (now using /sources/:id route)
-                                    const sourceLink = sourceId ? `/sources/${sourceId}` : '#';
+                                    const sourceLink = sourceId ? `/app/sources/${sourceId}` : '#';
                                     return `${i + 1}. [${fileName}](${sourceLink})`;
                                 }).join('\n');
 
