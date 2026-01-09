@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Item, Artifact } from '../../lib/storage';
 import { useProject } from '../context/ProjectContext';
-import { 
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter 
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  GitPullRequest, AlertTriangle, FileText, Calendar, 
-  User, CheckCircle2, XCircle, Clock, Trash2, 
+import {
+  GitPullRequest, AlertTriangle, FileText, Calendar,
+  User, CheckCircle2, XCircle, Clock, Trash2,
   ChevronRight, ExternalLink, ShieldAlert,
   Layers, Layout, Info
 } from 'lucide-react';
@@ -28,7 +28,7 @@ export function CRDetail({ item, onClose, onUpdate }: CRDetailProps) {
   const [members, setMembers] = useState<any[]>([]);
   const [relatedActions, setRelatedActions] = useState<Item[]>([]);
   const meta = (item.meta || {}) as any;
-  
+
   // 使用 Context 中的 adapter，而不是直接調用 StorageFactory
   const { adapter } = useProject();
 
@@ -66,7 +66,7 @@ export function CRDetail({ item, onClose, onUpdate }: CRDetailProps) {
 
   const handleStatusChange = async (newStatus: string) => {
     setIsUpdating(true);
-    
+
     // 1. Update the CR status
     await adapter.updateItem(item.id, {
       meta: { ...meta, cr_status: newStatus }
@@ -128,7 +128,7 @@ export function CRDetail({ item, onClose, onUpdate }: CRDetailProps) {
     }
   };
 
-  const doneActionsCount = relatedActions.filter(a => a.status === 'done').length;
+  const doneActionsCount = relatedActions.filter(a => a.status === 'completed').length;
   const currentOwner = members.find(m => m.id === meta.owner_id);
 
   return (
@@ -162,8 +162,8 @@ export function CRDetail({ item, onClose, onUpdate }: CRDetailProps) {
               <Label className="text-muted-foreground flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5" /> 變更狀態
               </Label>
-              <Select 
-                value={meta.cr_status || 'requested'} 
+              <Select
+                value={meta.cr_status || 'requested'}
                 onValueChange={handleStatusChange}
                 disabled={isUpdating}
               >
@@ -184,8 +184,8 @@ export function CRDetail({ item, onClose, onUpdate }: CRDetailProps) {
               <Label className="text-muted-foreground flex items-center gap-2">
                 <User className="h-3.5 w-3.5" /> 內部負責人 (Owner)
               </Label>
-              <Select 
-                value={meta.owner_id || 'unassigned'} 
+              <Select
+                value={meta.owner_id || 'unassigned'}
                 onValueChange={handleOwnerChange}
               >
                 <SelectTrigger className="w-full">
@@ -233,7 +233,7 @@ export function CRDetail({ item, onClose, onUpdate }: CRDetailProps) {
                   )}
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">影響頁面</span>
                 <div className="flex flex-wrap gap-2">
@@ -304,14 +304,14 @@ export function CRDetail({ item, onClose, onUpdate }: CRDetailProps) {
                 </Badge>
               )}
             </div>
-            
+
             <div className="space-y-2">
               {relatedActions.length > 0 ? (
                 relatedActions.map(action => (
                   <div key={action.id} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors cursor-pointer group">
                     <div className="flex items-center gap-3">
-                      <div className={`h-2 w-2 rounded-full ${action.status === 'done' ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`} />
-                      <span className={`text-sm ${action.status === 'done' ? 'text-muted-foreground line-through' : 'font-medium'}`}>
+                      <div className={`h-2 w-2 rounded-full ${action.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`} />
+                      <span className={`text-sm ${action.status === 'completed' ? 'text-muted-foreground line-through' : 'font-medium'}`}>
                         {action.title}
                       </span>
                     </div>
@@ -333,7 +333,7 @@ export function CRDetail({ item, onClose, onUpdate }: CRDetailProps) {
         </div>
 
         <SheetFooter className="gap-2 sm:gap-0 pt-6 border-t mt-auto sticky bottom-0 bg-background pb-6">
-          <Button variant="ghost" className="text-destructive hover:bg-destructive/10 h-10" onClick={() => {}}>
+          <Button variant="ghost" className="text-destructive hover:bg-destructive/10 h-10" onClick={() => { }}>
             <Trash2 className="h-4 w-4 mr-2" /> 刪除
           </Button>
           <div className="flex-1" />

@@ -86,7 +86,7 @@ export function MapViewPage() {
 
     if (relatedActions.length === 0) return 0;
 
-    const doneCount = relatedActions.filter(i => i.status === 'done').length;
+    const doneCount = relatedActions.filter(i => i.status === 'completed').length;
     return Math.round((doneCount / relatedActions.length) * 100);
   };
 

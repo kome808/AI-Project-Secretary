@@ -124,7 +124,7 @@ export function WorkDetailPage() {
     const actions = relatedItems.filter(item => item.type === 'action');
     if (actions.length === 0) return 0;
 
-    const doneCount = actions.filter(i => i.status === 'done').length;
+    const doneCount = actions.filter(i => i.status === 'completed').length;
     return Math.round((doneCount / actions.length) * 100);
   };
 
@@ -336,7 +336,7 @@ export function WorkDetailPage() {
                     onClick={() => navigate('/app/tasks?view=actions')}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${item.status === 'done' ? 'bg-emerald-500' :
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${item.status === 'completed' ? 'bg-emerald-500' :
                         item.status === 'blocked' ? 'bg-destructive' :
                           'bg-primary'
                         }`} />
