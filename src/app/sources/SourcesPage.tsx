@@ -67,6 +67,8 @@ export function SourcesPage() {
   const [cleanupCount, setCleanupCount] = useState(0);
   const [isPruning, setIsPruning] = useState(false);
   const [isPruneConfirmOpen, setIsPruneConfirmOpen] = useState(false);
+  const [isRemoveDupConfirmOpen, setIsRemoveDupConfirmOpen] = useState(false);
+  const [isRemovingDuplicates, setIsRemovingDuplicates] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -230,16 +232,12 @@ export function SourcesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                if (confirm(`確定要移除 ${duplicateArtifacts.length} 個重複的文件嗎？\n將保留較早建立的版本。`)) {
-                  removeDuplicates();
-                }
-              }}
-              disabled={isCleaning || isLoading}
+              onClick={() => setIsRemoveDupConfirmOpen(true)}
+              disabled={isCleaning || isLoading || isRemovingDuplicates}
               className="mr-2 border-amber-300 text-amber-700 hover:bg-amber-50"
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              移除重複 ({duplicateArtifacts.length})
+              {isRemovingDuplicates ? '移除中...' : `移除重複 (${duplicateArtifacts.length})`}
             </Button>
           )}
           {!selectionMode && getCurrentUser() && isSystemAdmin(getCurrentUser()!) && (
@@ -590,6 +588,35 @@ export function SourcesPage() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction onClick={executePruneStorage} className="bg-amber-600 text-white hover:bg-amber-700">
               確認清理
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Remove Duplicates Confirmation Dialog */}
+      <AlertDialog open={isRemoveDupConfirmOpen} onOpenChange={setIsRemoveDupConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要移除重複文件嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              將會移除 {duplicateArtifacts.length} 個重複的文件。
+              <br /><br />
+              系統會<strong>保留較早建立的版本</strong>，移除較新的重複項目。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemovingDuplicates}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setIsRemoveDupConfirmOpen(false);
+                setIsRemovingDuplicates(true);
+                await removeDuplicates();
+                setIsRemovingDuplicates(false);
+              }}
+              disabled={isRemovingDuplicates}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              {isRemovingDuplicates ? '移除中...' : '確認移除'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
