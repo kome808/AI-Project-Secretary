@@ -392,134 +392,130 @@ export class SupabaseAdapter implements StorageAdapter {
           if (seenContent.has(contentSig)) return false;
           seenContent.add(contentSig);
           return true;
-        });
-      }
+          return { data: { documents }, error: null };
 
+        } catch (err) {
+          console.warn('⚠️ [queryKnowledgeBase] Remote RAG failed, falling back to local keyword search:', err);
 
-      return { data: { documents }, error: null };
+          // 2. Fallback: Local Keyword Search (Client-side)
+          try {
+            const schemaName = getSchemaName();
+            // Fetch recent artifacts (limit 20 to avoid performance hit)
+            const { data: artifacts, error } = await this.supabase
+              .schema(schemaName)
+              .from('artifacts')
+              .select('*')
+              .eq('project_id', projectId)
+              .eq('archived', false) // 🔥 Fix: Don't search archived/deleted files
+              .order('created_at', { ascending: false })
+              .limit(20);
 
-    } catch (err) {
-      console.warn('⚠️ [queryKnowledgeBase] Remote RAG failed, falling back to local keyword search:', err);
+            if (error || !artifacts) {
+              return { data: { documents: [] }, error: null };
+            }
 
-      // 2. Fallback: Local Keyword Search (Client-side)
-      try {
-        const schemaName = getSchemaName();
-        // Fetch recent artifacts (limit 20 to avoid performance hit)
-        const { data: artifacts, error } = await this.supabase
-          .schema(schemaName)
-          .from('artifacts')
-          .select('*')
-          .eq('project_id', projectId)
-          .eq('archived', false) // 🔥 Fix: Don't search archived/deleted files
-          .order('created_at', { ascending: false })
-          .limit(20);
+            const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
 
-        if (error || !artifacts) {
-          return { data: { documents: [] }, error: null };
+            let matchedDocs = artifacts.map(artifact => {
+              let score = 0;
+              const content = (artifact.original_content || '').toLowerCase();
+              const title = (artifact.meta?.file_name || artifact.id).toLowerCase();
+
+              // Basic scoring
+              keywords.forEach(keyword => {
+                if (content.includes(keyword)) score += 2;
+                if (title.includes(keyword)) score += 5;
+              });
+
+              // Recent boost
+              const ageHours = (Date.now() - new Date(artifact.created_at).getTime()) / (1000 * 60 * 60);
+              if (ageHours < 24) score += 1;
+
+              return {
+                id: artifact.id,
+                content: artifact.original_content || '[Binary File]',
+                metadata: {
+                  title: artifact.meta?.file_name || 'Untitled',
+                  source_id: artifact.id,
+                  type: artifact.content_type,
+                  created_at: artifact.created_at
+                },
+                similarity: score
+              };
+            });
+
+            // Filter and sort
+            matchedDocs = matchedDocs.filter(d => d.similarity > 0);
+
+            // If still no matches, just return valid recent text files (context fallback)
+            if (matchedDocs.length === 0) {
+              matchedDocs = artifacts
+                .filter(a => a.content_type?.startsWith('text/') || !a.content_type)
+                .map(artifact => ({
+                  id: artifact.id,
+                  content: artifact.original_content || '[Binary File]',
+                  metadata: {
+                    title: artifact.meta?.file_name || 'Untitled',
+                    source_id: artifact.id,
+                    type: artifact.content_type,
+                    created_at: artifact.created_at
+                  },
+                  similarity: 0.1
+                }));
+            }
+
+            matchedDocs.sort((a, b) => b.similarity - a.similarity);
+            return { data: { documents: matchedDocs.slice(0, matchCount) }, error: null };
+
+          } catch (fallbackErr) {
+            console.error('❌ [queryKnowledgeBase] Fallback failed:', fallbackErr);
+            return { data: { documents: [] }, error: null };
+          }
         }
-
-        const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
-
-        let matchedDocs = artifacts.map(artifact => {
-          let score = 0;
-          const content = (artifact.original_content || '').toLowerCase();
-          const title = (artifact.meta?.file_name || artifact.id).toLowerCase();
-
-          // Basic scoring
-          keywords.forEach(keyword => {
-            if (content.includes(keyword)) score += 2;
-            if (title.includes(keyword)) score += 5;
-          });
-
-          // Recent boost
-          const ageHours = (Date.now() - new Date(artifact.created_at).getTime()) / (1000 * 60 * 60);
-          if (ageHours < 24) score += 1;
-
-          return {
-            id: artifact.id,
-            content: artifact.original_content || '[Binary File]',
-            metadata: {
-              title: artifact.meta?.file_name || 'Untitled',
-              source_id: artifact.id,
-              type: artifact.content_type,
-              created_at: artifact.created_at
-            },
-            similarity: score
-          };
-        });
-
-        // Filter and sort
-        matchedDocs = matchedDocs.filter(d => d.similarity > 0);
-
-        // If still no matches, just return valid recent text files (context fallback)
-        if (matchedDocs.length === 0) {
-          matchedDocs = artifacts
-            .filter(a => a.content_type?.startsWith('text/') || !a.content_type)
-            .map(artifact => ({
-              id: artifact.id,
-              content: artifact.original_content || '[Binary File]',
-              metadata: {
-                title: artifact.meta?.file_name || 'Untitled',
-                source_id: artifact.id,
-                type: artifact.content_type,
-                created_at: artifact.created_at
-              },
-              similarity: 0.1
-            }));
-        }
-
-        matchedDocs.sort((a, b) => b.similarity - a.similarity);
-        return { data: { documents: matchedDocs.slice(0, matchCount) }, error: null };
-
-      } catch (fallbackErr) {
-        console.error('❌ [queryKnowledgeBase] Fallback failed:', fallbackErr);
-        return { data: { documents: [] }, error: null };
       }
-    }
-  }
 
   // System Prompts Methods
   async getSystemPrompts(
-    projectId: string
-  ): Promise<StorageResponse<SystemPromptConfig>> {
-    try {
-      console.log('🔍 [getSystemPrompts] 開始查詢 system_prompts，projectId:', projectId);
+        projectId: string
+      ): Promise < StorageResponse < SystemPromptConfig >> {
+        try {
+          console.log('🔍 [getSystemPrompts] 開始查詢 system_prompts，projectId:', projectId);
 
-      const { data, error } = await this.supabase
-        .schema('aiproject')
-        .from('system_prompts')
-        .select('*')
-        .eq('project_id', projectId)
-        .maybeSingle();
+          const { data, error } = await this.supabase
+            .schema('aiproject')
+            .from('system_prompts')
+            .select('*')
+            .eq('project_id', projectId)
+            .maybeSingle();
 
-      if (error) {
-        console.error('❌ [getSystemPrompts] Supabase 查詢錯誤:', error);
-        return { data: null as any, error: new Error(error.message) };
-      }
+          if(error) {
+            console.error('❌ [getSystemPrompts] Supabase 查詢錯誤:', error);
+            return { data: null as any, error: new Error(error.message) };
+          }
 
       // 🔥 如果沒有設定，回傳 prompts.ts 中定義的預設值（而非空字串）
-      if (!data) {
-        console.log('⚠️ [getSystemPrompts] 查無資料，回傳 prompts.ts 預值');
-        const defaultPrompts: SystemPromptConfig = {
-          wbs_parser: WBS_PARSER_PROMPT,
-          intent_classification: generateSystemPrompt(),
-          few_shot_examples: generateFewShotPrompt(),
-          prompt_templates: DEFAULT_PROMPT_TEMPLATES // 🔥 新增預設模板
-        };
-        console.log('📋 [getSystemPrompts] 預設值長度:', {
-          wbs_parser: defaultPrompts.wbs_parser.length,
-          intent_classification: defaultPrompts.intent_classification.length,
-          few_shot_examples: defaultPrompts.few_shot_examples.length,
-          prompt_templates: defaultPrompts.prompt_templates.length
-        });
-        return {
-          data: defaultPrompts,
-          error: null
-        };
-      }
+      if(!data) {
+            console.log('⚠️ [getSystemPrompts] 查無資料，回傳 prompts.ts 預值');
+            const defaultPrompts: SystemPromptConfig = {
+              wbs_parser: WBS_PARSER_PROMPT,
+              intent_classification: generateSystemPrompt(),
+              few_shot_examples: generateFewShotPrompt(),
+              prompt_templates: DEFAULT_PROMPT_TEMPLATES // 🔥 新增預設模板
+            };
+            console.log('📋 [getSystemPrompts] 預設值長度:', {
+              wbs_parser: defaultPrompts.wbs_parser.length,
+              intent_classification: defaultPrompts.intent_classification.length,
+              few_shot_examples: defaultPrompts.few_shot_examples.length,
+              prompt_templates: defaultPrompts.prompt_templates.length
+            });
+            return {
+              data: defaultPrompts,
+              error: null
+            };
+          }
 
       // 🔥 如果 prompt_templates 欄位不存在，補上預設值
-      if (!data.prompt_templates) {
+      if(!data.prompt_templates) {
         data.prompt_templates = DEFAULT_PROMPT_TEMPLATES;
       }
 

@@ -97,7 +97,7 @@ serve(async (req) => {
 
         // 2. QUERY Route: Search similar documents
         if (path === 'query') {
-            const { query, project_id, threshold = 0.5, match_count = 5 } = await req.json();
+            const { query, project_id, threshold = 0.5, match_count = 5, search_type = 'documents' } = await req.json();
 
             if (!query || !project_id) {
                 throw new Error('Missing required fields: query, project_id');
@@ -123,22 +123,83 @@ serve(async (req) => {
 
             const queryVector = embeddingData.data[0].embedding;
 
-            // Call RPC Function
-            const { data: documents, error } = await supabase.rpc('match_documents', {
-                query_embedding: queryVector,
-                match_threshold: threshold,
-                match_count: match_count,
-                filter_project_id: project_id,
+            // Determine which RPC to call based on search_type
+            if (search_type === 'tasks') {
+                // Call match_tasks RPC
+                const { data: tasks, error } = await supabase.rpc('match_tasks', {
+                    query_embedding: queryVector,
+                    match_threshold: threshold,
+                    match_count: match_count,
+                    project_id: project_id,
+                });
+
+                if (error) throw error;
+
+                // Map result to common document format or return raw
+                return new Response(JSON.stringify({ documents: tasks }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+
+            } else {
+                // Default: Call match_documents RPC (existing logic)
+                const { data: documents, error } = await supabase.rpc('match_documents', {
+                    query_embedding: queryVector,
+                    match_threshold: threshold,
+                    match_count: match_count,
+                    filter_project_id: project_id,
+                });
+
+                if (error) throw error;
+
+                return new Response(JSON.stringify({ documents }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+            }
+        }
+
+        if (path === 'embed-task') {
+            const { task_id, title, description, project_id } = await req.json();
+
+            if (!task_id || !title || !project_id) {
+                throw new Error('Missing required fields for task embedding');
+            }
+
+            const contentToEmbed = `${title}\n${description || ''}`;
+
+            // Call OpenAI
+            const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'text-embedding-3-small',
+                    input: contentToEmbed.replaceAll('\n', ' '),
+                }),
             });
+
+            const embeddingData = await embeddingResponse.json();
+            if (embeddingData.error) {
+                throw new Error(`OpenAI Error: ${embeddingData.error.message}`);
+            }
+            const embedding = embeddingData.data[0].embedding;
+
+            // Update items table directly
+            const { error } = await supabase
+                .from('items')
+                .update({ embedding })
+                .eq('id', task_id)
+                .eq('project_id', project_id);
 
             if (error) throw error;
 
-            return new Response(JSON.stringify({ documents }), {
+            return new Response(JSON.stringify({ success: true }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
 
-        throw new Error('Invalid endpoint. Use /embed or /query');
+        throw new Error('Invalid endpoint. Use /embed, /query, or /embed-task');
 
     } catch (error) {
         console.error('RAG Error:', error);

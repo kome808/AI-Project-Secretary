@@ -101,6 +101,7 @@ export interface Item {
   notes?: string; // 備註內容（多行文字）
   notes_updated_at?: string; // 備註最後更新時間
   notes_updated_by?: string; // 備註最後更新者 email
+  embedding?: number[]; // Vector embedding (1536 dim)
   meta?: Record<string, any>; // For flexible extension (e.g., tags, confidence, pending target, rule scope)
   created_at: string;
   updated_at: string;
