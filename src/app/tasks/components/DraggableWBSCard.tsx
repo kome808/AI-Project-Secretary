@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDrag, useDrop } from 'react-dnd';
-import { ChevronDown, ChevronRight, User, Calendar, MoreVertical, Edit, Trash2, Plus, GripVertical, ExternalLink, Layers } from 'lucide-react';
+import { ChevronDown, ChevronRight, User, Calendar, MoreVertical, Edit, Trash2, Plus, GripVertical, ExternalLink, Layers, Briefcase, ListChecks } from 'lucide-react';
 import { Item, Member } from '../../../lib/storage/types';
 import { ItemCard } from './ItemCard';
 import {
@@ -392,15 +392,45 @@ export function DraggableWBSCard({
               <Edit className="h-4 w-4 mr-2" />
               編輯
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => {
-              if (!confirm('確定要將此任務轉換為功能模組嗎？\n轉換後將移至「功能模組」頁面。')) return;
-              onItemUpdate(item.id, {
-                meta: { ...item.meta, isFeatureModule: true }
-              }).then(() => toast.success('已轉換為功能模組'));
-            }}>
-              <Layers className="h-4 w-4 mr-2" />
-              轉換為功能模組
-            </DropdownMenuItem>
+
+            {/* Conversion options based on current item type */}
+            {item.type === 'todo' ? (
+              // Todo → 專案工作
+              <DropdownMenuItem onClick={() => {
+                if (!confirm('確定要將此待辦事項轉換為專案工作嗎？\n轉換後將移至「專案工作」頁面。')) return;
+                onItemUpdate(item.id, {
+                  type: 'general',
+                  meta: { ...item.meta, isWorkPackage: true, isFeatureModule: false }
+                }).then(() => toast.success('已轉換為專案工作'));
+              }}>
+                <Briefcase className="h-4 w-4 mr-2" />
+                轉換為專案工作
+              </DropdownMenuItem>
+            ) : (
+              // 專案工作 → 功能模組 或 待辦事項
+              <>
+                <DropdownMenuItem onClick={() => {
+                  if (!confirm('確定要將此任務轉換為功能模組嗎？\n轉換後將移至「功能模組」頁面。')) return;
+                  onItemUpdate(item.id, {
+                    meta: { ...item.meta, isFeatureModule: true, isWorkPackage: false }
+                  }).then(() => toast.success('已轉換為功能模組'));
+                }}>
+                  <Layers className="h-4 w-4 mr-2" />
+                  轉換為功能模組
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  if (!confirm('確定要將此任務轉換為待辦事項嗎？\n轉換後將移至「待辦事項」頁面。')) return;
+                  onItemUpdate(item.id, {
+                    type: 'todo',
+                    meta: { ...item.meta, isWorkPackage: false, isFeatureModule: false }
+                  }).then(() => toast.success('已轉換為待辦事項'));
+                }}>
+                  <ListChecks className="h-4 w-4 mr-2" />
+                  轉換為待辦事項
+                </DropdownMenuItem>
+              </>
+            )}
+
             <DropdownMenuItem
               onClick={(e) => {
                 e.stopPropagation();
