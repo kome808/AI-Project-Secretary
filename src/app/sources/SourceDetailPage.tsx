@@ -19,7 +19,8 @@ import {
     MessageCircle,
     FileCheck,
     GitBranch,
-    Briefcase
+    Briefcase,
+    Trash2
 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -148,8 +149,31 @@ export function SourceDetailPage() {
     };
 
     const handleNavigateToItem = (item: Item) => {
-        // Navigate directly to task detail page
+        // Fix: Navigate directly to task detail instead of list view
         navigate(`/app/tasks/${item.id}`);
+    };
+
+    const handleDeleteGhostItem = async (e: React.MouseEvent, item: Item) => {
+        e.stopPropagation();
+        if (!confirm(`確定要永久刪除 "${item.title}" 嗎？\n此操作會直接從資料庫移除該項目，且無法復原。`)) return;
+
+        try {
+            const storage = getStorageClient();
+            const { error } = await storage.deleteItem(item.id);
+
+            if (error) throw error;
+
+            toast.success('已刪除任務');
+
+            // Refresh items list
+            if (currentProject) {
+                const { data: itemsData } = await storage.getItems(currentProject.id);
+                setItems(itemsData || []);
+            }
+        } catch (error) {
+            console.error('Failed to delete item:', error);
+            toast.error('刪除失敗');
+        }
     };
 
     if (loading) {
@@ -387,9 +411,9 @@ export function SourceDetailPage() {
                                                     <div
                                                         key={item.id}
                                                         onClick={() => handleNavigateToItem(item)}
-                                                        className="p-3 bg-card rounded-[var(--radius)] border border-border hover:border-primary/50 cursor-pointer transition-all hover:shadow-sm"
+                                                        className="group relative p-3 bg-card rounded-[var(--radius)] border border-border hover:border-primary/50 cursor-pointer transition-all hover:shadow-sm"
                                                     >
-                                                        <p className="font-medium text-sm line-clamp-1 text-primary">{item.title}</p>
+                                                        <p className="font-medium text-sm line-clamp-1 text-primary pr-6">{item.title}</p>
                                                         {item.description && (
                                                             <p className="text-muted-foreground text-xs line-clamp-2 mt-1">{item.description}</p>
                                                         )}
@@ -399,6 +423,15 @@ export function SourceDetailPage() {
                                                                 <span className="text-[10px] text-muted-foreground">@{item.assignee_id}</span>
                                                             )}
                                                         </div>
+
+                                                        {/* Force Delete Button for Ghost Items */}
+                                                        <button
+                                                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-all"
+                                                            onClick={(e) => handleDeleteGhostItem(e, item)}
+                                                            title="強制刪除此項目"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
                                                     </div>
                                                 ))}
                                             </div>
