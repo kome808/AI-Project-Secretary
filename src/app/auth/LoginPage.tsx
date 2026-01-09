@@ -72,7 +72,7 @@ export default function LoginPage() {
                 localStorage.setItem('current_user', JSON.stringify(member));
 
                 toast.success(`登入成功！歡迎回來 ${isAdmin ? '(管理員)' : ''}`);
-                navigate('/');
+                navigate('/app');
             }
         } catch (error: any) {
             console.error('Login error:', error);

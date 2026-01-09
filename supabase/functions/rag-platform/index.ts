@@ -40,19 +40,32 @@ serve(async (req) => {
 
     try {
         const url = new URL(req.url);
-        const path = url.pathname.split('/').pop(); // "embed" or "query"
 
-        // Initialize Supabase Client with aiproject schema (where embeddings table lives)
+        // Initialize Supabase Client with aiproject schema
         const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
             db: { schema: 'aiproject' }
         });
 
-        // Fetch API Key dynamically using helper
+        // Fetch API Key dynamically
         const OPENAI_API_KEY = await getOpenAIKey(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
+        // Parse Request Body ONCE (supports both path-based and body-based routing)
+        let body;
+        try {
+            body = await req.json();
+        } catch (e) {
+            throw new Error('Invalid JSON body');
+        }
+
+        // Determine Action: Prefer 'action' in body, fallback to URL path suffix
+        const pathSuffix = url.pathname.split('/').pop();
+        const action = body.action || pathSuffix;
+
+        console.log(`🚀 Request Action: ${action} (Path: ${pathSuffix})`);
+
         // 1. EMBED Route: Vectorize and Store
-        if (path === 'embed') {
-            const { content, source_id, source_type, project_id, metadata } = await req.json();
+        if (action === 'embed') {
+            const { content, source_id, source_type, project_id, metadata } = body;
 
             if (!content || !source_id || !source_type || !project_id) {
                 throw new Error('Missing required fields: content, source_id, source_type, project_id');
@@ -96,8 +109,8 @@ serve(async (req) => {
         }
 
         // 2. QUERY Route: Search similar documents
-        if (path === 'query') {
-            const { query, project_id, threshold = 0.5, match_count = 5, search_type = 'documents' } = await req.json();
+        if (action === 'query') {
+            const { query, project_id, threshold = 0.5, match_count = 5, search_type = 'documents' } = body;
 
             if (!query || !project_id) {
                 throw new Error('Missing required fields: query, project_id');
@@ -157,8 +170,9 @@ serve(async (req) => {
             }
         }
 
-        if (path === 'embed-task') {
-            const { task_id, title, description, project_id } = await req.json();
+        // 3. EMBED TASK Route
+        if (action === 'embed-task') {
+            const { task_id, title, description, project_id } = body;
 
             if (!task_id || !title || !project_id) {
                 throw new Error('Missing required fields for task embedding');
@@ -199,7 +213,132 @@ serve(async (req) => {
             });
         }
 
-        throw new Error('Invalid endpoint. Use /embed, /query, or /embed-task');
+        // 4. ANALYZE DOCUMENT Route (Phase 3 Expanded)
+        if (action === 'analyze-document') {
+            const { content, project_id, document_type: overrideDocType } = body;
+
+            if (!content || !project_id) {
+                throw new Error('Missing content or project_id for analysis');
+            }
+
+            console.log(`📄 Analyzing document for project: ${project_id} (Length: ${content.length})`);
+
+            // --- Step 1: Detect Document Type ---
+            let docType = overrideDocType;
+            if (!docType) {
+                const typeResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            { role: 'system', content: 'Identify document type: meeting_notes, requirements, contract, technical, communication, design, or general. Return JSON: {"type": "..."}' },
+                            { role: 'user', content: content.substring(0, 1000) }
+                        ],
+                        response_format: { type: "json_object" }
+                    }),
+                });
+                const typeData = await typeResponse.json();
+                docType = JSON.parse(typeData.choices[0].message.content).type || 'general';
+            }
+            console.log(`📌 Document Type Identified: ${docType}`);
+
+            // --- Step 2: Semantic Chunking ---
+            const chunks = semanticChunking(content);
+            console.log(`🔪 Split into ${chunks.length} chunks`);
+
+            const analysisChunks = [];
+            const CHUNK_LIMIT = 10; // Avoid timeout, process first 10 meaningful chunks
+            const processedChunks = chunks.slice(0, CHUNK_LIMIT);
+
+            // --- Step 3: Process Chunks (Parallel-ish) ---
+            for (let i = 0; i < processedChunks.length; i++) {
+                const chunkText = processedChunks[i];
+                if (chunkText.trim().length < 20) continue; // Skip too short chunks
+
+                // 3a. Generate Embedding for Chunk pre-filtering
+                const embedding = await generateEmbedding(chunkText, OPENAI_API_KEY);
+
+                // 3b. Call RPC for candidate tasks
+                const { data: candidates, error: rpcError } = await supabase.rpc('match_tasks', {
+                    query_embedding: embedding,
+                    project_id: project_id,
+                    match_count: 5,
+                    match_threshold: 0.3
+                });
+
+                if (rpcError) {
+                    console.error('RPC Error:', rpcError);
+                }
+
+                // 3c. LLM Refined Mapping
+                const prompt = `
+Segment of Document:
+"${chunkText}"
+
+Existing Tasks (Candidate Matches):
+${JSON.stringify(candidates || [])}
+
+Goal:
+Analyze the segment and determine if it maps to an existing task or suggests a new one.
+
+Output JSON:
+{
+  "action": "map_existing" | "create_new" | "append_spec" | "ignore",
+  "targetTaskId": "uuid" | null,
+  "extractedTitle": "Brief title",
+  "extractedDescription": "Detail content",
+  "category": "action" | "decision" | "todo" | "rule" | "cr",
+  "confidence": 0.0-1.0,
+  "reasoning": "Why",
+  "riskLevel": "high" | "medium" | "low"
+}
+`;
+                const mappingResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            { role: 'system', content: 'You are a PM Assistant. Output valid JSON only.' },
+                            { role: 'user', content: prompt }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.1
+                    }),
+                });
+
+                const mappingData = await mappingResponse.json();
+                const mappingResult = JSON.parse(mappingData.choices[0].message.content);
+
+                analysisChunks.push({
+                    id: crypto.randomUUID(),
+                    originalText: chunkText,
+                    sourceLocation: `Section ${i + 1}`,
+                    candidateTasks: candidates || [],
+                    mappingResult
+                });
+            }
+
+            // --- Step 4: Summary calculation ---
+            const summary = {
+                totalItems: analysisChunks.length,
+                newItems: analysisChunks.filter(c => c.mappingResult?.action === 'create_new').length,
+                mappedItems: analysisChunks.filter(c => c.mappingResult?.action === 'map_existing').length,
+                appendedSpecs: analysisChunks.filter(c => c.mappingResult?.action === 'append_spec').length,
+                criticalRisks: analysisChunks.filter(c => c.mappingResult?.riskLevel === 'high').length
+            };
+
+            return new Response(JSON.stringify({
+                document_type: docType,
+                chunks: analysisChunks,
+                summary
+            }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+
+        throw new Error(`Invalid action: ${action}`);
 
     } catch (error) {
         console.error('RAG Error:', error);
@@ -209,3 +348,61 @@ serve(async (req) => {
         });
     }
 });
+
+/**
+ * Helper: Generate Embedding
+ */
+async function generateEmbedding(text: string, apiKey: string) {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            model: 'text-embedding-3-small',
+            input: text.replaceAll('\n', ' '),
+        }),
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.data[0].embedding;
+}
+
+/**
+ * Helper: Simple Section-based Chunking
+ */
+function semanticChunking(content: string) {
+    const lines = content.split('\n');
+    const chunks: string[] = [];
+    let currentChunk: string[] = [];
+
+    // Simple pattern for titles: "1. ", "1.1 ", "■ ", "● ", or all caps short lines
+    const titlePattern = /^(\d+(\.\d+)*\.?|[一二三四五六七八九十]+、|[\(（][\d一二三五六七八九十]+[\)）]|[■●◆▪])\s+/;
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (titlePattern.test(trimmed) && currentChunk.length > 3) {
+            chunks.push(currentChunk.join('\n'));
+            currentChunk = [line];
+        } else {
+            currentChunk.push(line);
+        }
+    }
+
+    if (currentChunk.length > 0) {
+        chunks.push(currentChunk.join('\n'));
+    }
+
+    // If chunks are too few/big, split by size secondary
+    const finalChunks: string[] = [];
+    for (const chunk of chunks) {
+        if (chunk.length > 2000) {
+            for (let i = 0; i < chunk.length; i += 1800) {
+                finalChunks.push(chunk.substring(i, i + 2000));
+            }
+        } else {
+            finalChunks.push(chunk);
+        }
+    }
+
+    return finalChunks;
+}
+

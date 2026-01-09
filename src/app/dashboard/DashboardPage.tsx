@@ -6,12 +6,8 @@ import {
   Sparkles,
   MessageSquare,
   AlertTriangle,
-  FileText,
-  Zap,
   TrendingUp,
-  Clock,
-  User,
-  Files
+  User
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -80,8 +76,8 @@ export function DashboardPage() {
 
   // Stats Calculation
   const stats = {
-    ongoing: items.filter(i => i.status === 'in_progress').length,
-    completed: items.filter(i => i.status === 'completed').length,
+    ongoing: items.filter((i: any) => i.status === 'in_progress').length,
+    completed: items.filter((i: any) => i.status === 'completed').length,
     total: items.length
   };
 
@@ -233,7 +229,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-12 pt-4">
+    <div className="space-y-6 max-w-6xl mx-auto pb-12 pt-4">
       {/* Header */}
       <div>
         <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground/90">
@@ -245,118 +241,140 @@ export function DashboardPage() {
         </p>
       </div>
 
-      {/* Brief Card */}
+      {/* 精簡型晨間簡報 & 優先處理整合卡片 */}
       <Card className="border shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm">
-        <CardHeader className="pb-2 border-b-0">
+        <CardHeader className="py-3 px-4 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-primary/80">
-              <MessageSquare className="h-5 w-5" />
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-700">
+              <Sparkles className="h-4 w-4 text-blue-500" />
               晨間簡報
             </h2>
-            <Badge variant="secondary" className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100">
-              <Sparkles className="w-3 h-3 mr-1" />
-              AI 秘書
-            </Badge>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-400" />
+                  進行中 {stats.ongoing}
+                </div>
+                <div className="flex items-center gap-1 ml-2">
+                  <span className="w-2 h-2 rounded-full bg-green-400" />
+                  已完成 {stats.completed}
+                </div>
+              </div>
+              <Badge variant="outline" className="text-[10px] h-5 bg-blue-50/50 text-blue-600 border-blue-100">
+                AI 助理
+              </Badge>
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6 pt-4">
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-            <p className="text-gray-700 leading-relaxed font-medium">
-              {briefSummary}
-            </p>
-          </div>
-
-          {needsAttention.length > 0 && (
-            <div className="space-y-3">
-              <label className="text-sm text-gray-500 font-medium flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                今日優先處理
-              </label>
-
-              <div className="rounded-xl border border-red-100 bg-red-50/30 overflow-hidden">
-                {needsAttention.slice(0, 3).map((item, index) => (
-                  <div
-                    key={item.id}
-                    className={`
-                      group flex items-start gap-4 p-4 cursor-pointer hover:bg-red-50/50 transition-colors
-                      ${index !== 0 ? 'border-t border-red-100/50' : ''}
-                    `}
-                    onClick={() => handleItemClick(item)}
-                  >
-                    <div className="mt-1.5 w-2 h-2 rounded-full bg-red-500 shrink-0 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="font-semibold text-gray-900 truncate pr-4">
-                          {item.title}
-                        </p>
-                        <Badge variant="outline" className={`shrink-0 ${item.type === 'overdue' ? 'bg-red-100 text-red-600 border-red-200' : 'bg-gray-100 text-gray-600'}`}>
-                          {item.typeBadge}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-500">{item.daysInfo}</p>
-                    </div>
-                  </div>
-                ))}
+        <CardContent className="p-0">
+          <div className="grid grid-cols-1 md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            {/* 簡報文字區 */}
+            <div className="md:col-span-3 p-4 bg-white/30 text-sm leading-relaxed text-slate-600">
+              <div className="flex items-start gap-3">
+                <MessageSquare className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                <p className="font-medium text-slate-700">
+                  {briefSummary || "今天目前還沒有特別的專案更新摘要。"}
+                </p>
               </div>
             </div>
-          )}
 
-          <div className="flex items-center gap-2 pt-2 text-sm text-gray-400">
-            <FileText className="w-4 h-4" />
-            <span>點擊任何項目可查看完整詳情與來源依據</span>
+            {/* 優先處理清單區 */}
+            <div className="md:col-span-2 p-4 bg-slate-50/30">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />
+                  今日處理重點
+                </label>
+                {needsAttention.length > 0 && (
+                  <Badge className="bg-red-100 text-red-600 border-red-200 text-[10px] h-4 px-1.5 hover:bg-red-100">
+                    {needsAttention.length} 項
+                  </Badge>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                {needsAttention.length > 0 ? (
+                  needsAttention.slice(0, 3).map((item) => {
+                    const isOverdue = item.type === 'overdue';
+                    const isBlocked = item.type === 'blocked';
+                    const _isSuggestion = item.type === 'pending'; // AI suggestion
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`
+                          group flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer relative overflow-hidden
+                          ${isOverdue
+                            ? 'bg-red-50/80 border-red-100 hover:border-red-200 hover:shadow-sm hover:bg-red-50'
+                            : isBlocked
+                              ? 'bg-amber-50/80 border-amber-100 hover:border-amber-200 hover:shadow-sm hover:bg-amber-50'
+                              : 'bg-blue-50/80 border-blue-100 hover:border-blue-200 hover:shadow-sm hover:bg-blue-50'
+                          }
+                        `}
+                        onClick={() => handleItemClick(item)}
+                      >
+                        {/* 側邊彩色條 */}
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 
+                          ${isOverdue ? 'bg-red-400' : isBlocked ? 'bg-amber-400' : 'bg-blue-400'}
+                        `} />
+
+                        <div className="flex-1 min-w-0 ml-1">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <p className="text-[13px] font-bold text-slate-800 truncate pr-2">
+                              {item.title}
+                            </p>
+                            <Badge variant="outline" className={`
+                              text-[10px] h-4 px-1 shrink-0 border
+                              ${isOverdue
+                                ? 'bg-white text-red-600 border-red-200'
+                                : isBlocked
+                                  ? 'bg-white text-amber-600 border-amber-200'
+                                  : 'bg-white text-blue-600 border-blue-200'
+                              }
+                            `}>
+                              {item.typeBadge}
+                            </Badge>
+                          </div>
+                          <p className={`text-[11px] truncate font-medium
+                            ${isOverdue ? 'text-red-500' : isBlocked ? 'text-amber-500' : 'text-blue-500'}
+                          `}>
+                            {item.daysInfo}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-xs text-slate-400 italic">目前無緊急優先事項</p>
+                  </div>
+                )}
+                {needsAttention.length > 2 && (
+                  <button
+                    onClick={() => navigate('/inbox')}
+                    className="w-full text-center text-[10px] text-blue-500 hover:text-blue-600 font-medium py-1"
+                  >
+                    查看更多事項...
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Needs Attention Detail Card */}
-      {needsAttention.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-orange-500" />
-            <h3 className="font-semibold text-gray-700">需要你處理</h3>
-            <Badge variant="secondary" className="ml-auto bg-red-50 text-red-600 border-red-100">
-              {needsAttention.length} 項
-            </Badge>
-          </div>
-
-          <div className="space-y-3">
-            {needsAttention.slice(0, 3).map(item => (
-              <Card
-                key={item.id}
-                className="hover:shadow-md transition-all cursor-pointer border-l-4 border-l-red-500"
-                onClick={() => handleItemClick(item)}
-              >
-                <CardContent className="p-4 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-red-100 text-red-600 flex items-center justify-center shrink-0">
-                    <Clock className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-900 truncate">{item.title}</h4>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="outline" className="bg-red-50 text-red-600 border-red-100 text-xs px-1.5 py-0 h-5">
-                        {item.typeBadge}
-                      </Badge>
-                      <span className="text-xs text-gray-500">{item.daysInfo}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* AI Secretary Section */}
-      <Card className="border border-blue-100 bg-gradient-to-br from-blue-50/20 to-white shadow-sm overflow-hidden flex flex-col h-[600px]">
-        <CardHeader className="bg-blue-50/10 border-b border-blue-50 pb-4 shrink-0">
+      <Card className="border border-blue-100 bg-gradient-to-br from-blue-50/5 to-white shadow-md overflow-hidden flex flex-col h-[800px] transition-all border-l-4 border-l-blue-400">
+        <CardHeader className="bg-blue-50/10 border-b border-blue-50 py-3 shrink-0">
           <div className="space-y-1">
-            <h3 className="flex items-center gap-2 text-lg font-semibold text-blue-700">
-              <Sparkles className="w-5 h-5" />
+            <h3 className="flex items-center gap-2 text-base font-semibold text-blue-700">
+              <Sparkles className="w-4 h-4" />
               AI 專案秘書
               <HelpTooltip content={tooltips.dashboard.aiInput} side="right" />
             </h3>
-            <p className="text-sm text-gray-500">
-              貼上對話、會議記錄，或用自然語言提問，我會幫你整理成任務與建議
+            <p className="text-xs text-slate-500">
+              貼上會議記錄獲取摘要，或用自然語言規劃任務
             </p>
           </div>
         </CardHeader>

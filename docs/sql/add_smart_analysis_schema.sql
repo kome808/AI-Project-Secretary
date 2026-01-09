@@ -72,11 +72,24 @@ CREATE INDEX IF NOT EXISTS idx_ai_feedback_created_at ON aiproject.ai_feedback(c
 -- ai_feedback RLS 權限
 ALTER TABLE aiproject.ai_feedback ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow authenticated users to insert feedback"
-ON aiproject.ai_feedback FOR INSERT TO authenticated WITH CHECK (true);
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'ai_feedback' AND policyname = 'Allow authenticated users to insert feedback'
+    ) THEN
+        CREATE POLICY "Allow authenticated users to insert feedback"
+        ON aiproject.ai_feedback FOR INSERT TO authenticated WITH CHECK (true);
+    END IF;
 
-CREATE POLICY "Allow authenticated users to read feedback"
-ON aiproject.ai_feedback FOR SELECT TO authenticated USING (true);
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'ai_feedback' AND policyname = 'Allow authenticated users to read feedback'
+    ) THEN
+        CREATE POLICY "Allow authenticated users to read feedback"
+        ON aiproject.ai_feedback FOR SELECT TO authenticated USING (true);
+    END IF;
+END $$;
 
 -- 5. 註解說明
 COMMENT ON COLUMN aiproject.items.embedding IS '任務內容的向量表示 (1536維)';

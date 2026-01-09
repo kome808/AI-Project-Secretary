@@ -446,6 +446,9 @@ ${projectStructure}
     async function handleFileUpload(file?: File, input?: string) {
         try {
             const storage = getStorageClient();
+            const planningKeywords = ['規劃', '幫我安排', '要做什麼', '分解', '拆解', '步驟', '計畫'];
+            const featureModuleKeywords = ['功能模組', '模組清單', '功能列表', '系統功能', '開發清單', '功能需求'];
+            let currentInput = input || '';
 
             let uploadData = { storagePath: '', fileUrl: '', fileSize: 0 };
             let artifactId = '';
@@ -529,7 +532,7 @@ ${projectStructure}
 
 
                 // Interactive Check with Intelligent Detection
-                const isAmbiguousTextDoc = !file.type.startsWith('image/') && (!input || input.trim() === '');
+                const isAmbiguousTextDoc = !file.type.startsWith('image/') && (!currentInput || currentInput.trim() === '');
                 if (isAmbiguousTextDoc) {
                     setStatusMessage('AI 正在分析文件類型...');
 
@@ -537,6 +540,7 @@ ${projectStructure}
                     let detectedType = 'Other';
                     let suggestionMsg = `已讀取 ${file.name}，請問您希望我如何處理？`;
                     let suggestions = ['整理會議記錄', '建立 WBS', '建立功能模組', '分析需求規格', '摘要重點'];
+                    let autoActionInput = '';
 
                     try {
                         const { data: aiConfig } = await storage.getSystemAIConfig();
@@ -564,13 +568,16 @@ ${parsedContent!.content.substring(0, 2000)}`;
                             console.log('📄 AI Detected Document Type:', detectedType);
 
                             if (detectedType.includes('FeatureList')) {
-                                suggestionMsg = `我偵測到這是一份**功能需求文件**。💡\n建議為您直接**建立功能模組**，以便進行後續追蹤。`;
+                                suggestionMsg = `我偵測到這是一份**功能需求文件**。💡\n正在自動為您分析功能需求...`;
+                                autoActionInput = '建立功能模組';
                                 suggestions = ['建立功能模組', '分析需求規格', '摘要重點'];
                             } else if (detectedType.includes('WBS')) {
-                                suggestionMsg = `我偵測到這是一份**專案任務清單 (WBS)**。💡\n建議為您**建立專案工作**，以進行時程管理。`;
+                                suggestionMsg = `我偵測到這是一份**專案任務清單 (WBS)**。💡\n正在自動為您解析專案工作...`;
+                                autoActionInput = '建立專案工作';
                                 suggestions = ['建立專案工作', '分析關鍵路徑', '摘要重點'];
                             } else if (detectedType.includes('MeetingNotes')) {
-                                suggestionMsg = `我偵測到這是一份**會議記錄**。💡\n建議為您**整理待辦事項**與決議，或從中**識別功能需求**。`;
+                                suggestionMsg = `我偵測到這是一份**會議記錄**。💡\n正在自動為您整理待辦事項與決議...`;
+                                autoActionInput = '整理會議記錄';
                                 suggestions = ['整理會議記錄', '建立功能模組', '摘要重點'];
                             }
                         }
@@ -588,16 +595,19 @@ ${parsedContent!.content.substring(0, 2000)}`;
                         artifactId
                     });
 
-                    addMessage('assistant', suggestionMsg);
-                    setAiSuggestions(suggestions);
-                    setIsAIProcessing(false);
-                    return;
+                    if (autoActionInput) {
+                        currentInput = autoActionInput; // 設置新輸入，讓後續邏輯繼續執行
+                        addMessage('assistant', suggestionMsg);
+                        // 不再 return，繼續往下執行分析邏輯
+                    } else {
+                        addMessage('assistant', suggestionMsg);
+                        setAiSuggestions(suggestions);
+                        setIsAIProcessing(false);
+                        return;
+                    }
                 }
 
-                // If input exists, process immediately
-                // 🎯 先檢查是否為功能模組請求
-                const featureModuleKeywords = ['功能模組', '模組清單', '功能列表', '系統功能', '開發清單', '功能需求'];
-                const isFeatureModuleRequest = input ? (featureModuleKeywords.some(keyword => input.includes(keyword)) || input.includes('建立功能模組')) : false;
+                const isFeatureModuleRequest = currentInput ? (featureModuleKeywords.some((keyword: string) => currentInput.includes(keyword)) || currentInput.includes('建立功能模組')) : false;
 
                 if (isFeatureModuleRequest) {
                     // 功能模組分析
@@ -729,10 +739,10 @@ ${analysis.reasoning || ''}
 
                 // 其他文件分析
                 // 🎯 Smart Analysis for New File (Auto-trigger if content is relevant)
-                if (await processSmartAnalysis(input || '', parsedContent?.content, artifactId)) {
+                if (await processSmartAnalysis(currentInput, parsedContent?.content, artifactId)) {
                     // Handled by smart analysis
                 } else {
-                    await processDocumentAnalysis(input || '', {
+                    await processDocumentAnalysis(currentInput, {
                         file,
                         parsedContent: parsedContent!,
                         fileType,
@@ -752,13 +762,11 @@ ${analysis.reasoning || ''}
             }
 
             // 🔥 Step 2: 處理純文字輸入
-            const planningKeywords = ['規劃', '幫我安排', '要做什麼', '分解', '拆解', '步驟', '計畫'];
-            const featureModuleKeywords = ['功能模組', '模組清單', '功能列表', '系統功能', '開發清單'];
-            const isPlanningRequest = input ? planningKeywords.some(keyword => input.includes(keyword)) : false;
-            const isFeatureModuleRequest = input ? featureModuleKeywords.some(keyword => input.includes(keyword)) : false;
+            const isPlanningRequest = currentInput ? planningKeywords.some((keyword: string) => currentInput.includes(keyword)) : false;
+            const isFeatureModuleRequest2 = currentInput ? featureModuleKeywords.some((keyword: string) => currentInput.includes(keyword)) : false;
 
             // 🎯 建立功能模組處理
-            if (input && (isFeatureModuleRequest || input.includes('建立功能模組'))) {
+            if (currentInput && (isFeatureModuleRequest2 || currentInput.includes('建立功能模組'))) {
                 setStatusMessage('AI 秘書正在分析功能模組...');
                 const { data: aiConfig } = await storage.getSystemAIConfig();
                 if (!aiConfig || !aiConfig.is_active) {
@@ -778,7 +786,7 @@ ${analysis.reasoning || ''}
                 const featureAnalysisPrompt = `你是專業的系統分析師，請分析以下內容，識別出系統開發需要的功能模組。
 
 輸入內容：
-${pendingFile ? pendingFile.parsedContent.content.substring(0, 8000) : input}
+${pendingFile ? pendingFile.parsedContent.content.substring(0, 8000) : currentInput}
 
 請以 JSON 格式回傳：
 {

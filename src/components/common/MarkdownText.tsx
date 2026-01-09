@@ -1,17 +1,20 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+import { cn } from '@/components/ui/utils';
+
 interface MarkdownTextProps {
     content: string;
+    className?: string;
 }
 
-export function MarkdownText({ content }: MarkdownTextProps) {
+export function MarkdownText({ content, className }: MarkdownTextProps) {
     // Split content by markdown link pattern: [text](url)
     // Capturing group allows us to interleave text and links
     const parts = content.split(/(\[[^\]]+\]\([^)]+\))/g);
 
     return (
-        <span className="whitespace-pre-wrap">
+        <span className={cn("whitespace-pre-wrap", className)}>
             {parts.map((part, i) => {
                 const match = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
 

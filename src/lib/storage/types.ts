@@ -346,6 +346,17 @@ export type MessageRole = 'user' | 'assistant' | 'system';
 export type IntentType = 'CREATE' | 'QUERY' | 'UPDATE' | 'RELATE' | 'CLARIFY';
 export type ConversationStatus = 'active' | 'archived';
 
+export interface AIFeedback {
+  id: string;
+  project_id: string;
+  artifact_id?: string;
+  chunk_text: string;
+  original_mapping: any;
+  corrected_mapping: any;
+  feedback_type: 'incorrect_target' | 'missing_target' | 'wrong_category' | 'other';
+  created_at: string;
+}
+
 export interface Conversation {
   id: string;
   project_id: string;
@@ -501,6 +512,8 @@ export interface StorageAdapter {
   // RAG / AI Methods
   embedContent(content: string, sourceId: string, sourceType: 'item' | 'artifact', projectId: string, metadata?: any): Promise<StorageResponse<{ success: boolean }>>;
   queryKnowledgeBase(query: string, projectId: string, threshold?: number, matchCount?: number): Promise<StorageResponse<{ documents: any[] }>>;
+  matchTasks(query: string, projectId: string, matchCount?: number, threshold?: number): Promise<StorageResponse<any[]>>;
+  saveAIFeedback(feedback: Omit<AIFeedback, 'id' | 'created_at'>): Promise<StorageResponse<AIFeedback>>;
 
   // Maintenance
   pruneOrphanedFiles?(projectId: string): Promise<StorageResponse<{ deletedCount: number }>>;

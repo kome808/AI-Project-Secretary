@@ -18,7 +18,8 @@ import {
   WorkActivity,
   SystemAIConfig,
   AIProvider,
-  SystemPromptConfig
+  SystemPromptConfig,
+  AIFeedback
 } from './types';
 import { WBS_PARSER_PROMPT, generateSystemPrompt, generateFewShotPrompt, DEFAULT_PROMPT_TEMPLATES } from '../ai/prompts';
 
@@ -1744,5 +1745,22 @@ export class LocalAdapter implements StorageAdapter {
 
   async hardDeleteProject(id: string): Promise<StorageResponse<void>> {
     return this.purgeProject(id);
+  }
+
+  async matchTasks(query: string, projectId: string, matchCount?: number, threshold?: number): Promise<StorageResponse<any[]>> {
+    await this.simulateDelay();
+    return { data: [], error: null };
+  }
+
+  async saveAIFeedback(feedback: Omit<AIFeedback, 'id' | 'created_at'>): Promise<StorageResponse<AIFeedback>> {
+    await this.simulateDelay();
+    try {
+      const id = this.generateId();
+      const created_at = new Date().toISOString();
+      const newFeedback: AIFeedback = { ...feedback, id, created_at };
+      return { data: newFeedback, error: null };
+    } catch (e) {
+      return { data: null, error: e as Error };
+    }
   }
 }

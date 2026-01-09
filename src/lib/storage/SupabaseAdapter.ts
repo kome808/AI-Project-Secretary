@@ -18,7 +18,8 @@ import type {
   WorkActivity,
   AIProvider,
   GlobalConfig,
-  ConnectionStatus
+  ConnectionStatus,
+  AIFeedback
 } from './types';
 import { WBS_PARSER_PROMPT, generateSystemPrompt, generateFewShotPrompt, DEFAULT_PROMPT_TEMPLATES } from '../ai/prompts';
 import { getSupabaseClient } from '../supabase/client'; // 使用 Singleton client
@@ -28,12 +29,11 @@ import { getSupabaseClient } from '../supabase/client'; // 使用 Singleton clie
 function getSchemaName(): string {
   const schema = localStorage.getItem('supabase_schema');
   if (!schema || schema.trim() === '') {
-    console.warn('⚠️ Schema 名稱未設定，將使用 "public"（PostgreSQL 標準 Schema）。');
-    console.warn('   如果您的資料表在其他 Schema 中，請在 Supabase 設定頁面指定正確的 Schema。');
-    return 'public';
+    // 預設使用 'aiproject' schema，這是本系統的標準 Schema
+    return 'aiproject';
   }
   const normalizedSchema = schema.toLowerCase().trim();
-  console.log(`📊 使用 Schema: ${normalizedSchema}`);
+  // console.log(`📊 使用 Schema: ${normalizedSchema}`); // 減少 log 雜訊
   return normalizedSchema;
 }
 
@@ -43,6 +43,21 @@ export class SupabaseAdapter implements StorageAdapter {
   constructor() {
     // 使用 Singleton 實例，避免創建多個 GoTrueClient
     this.supabase = getSupabaseClient();
+  }
+
+  /**
+   * 確保 UUID 格式正確，將 "null" 或 "undefined" 字串轉換為真正的 null/undefined
+   */
+  private _sanitizeUUID(id: any): any {
+    if (id === null || id === undefined || id === '' || id === 'null' || id === 'undefined') {
+      return undefined; // 在 Supabase insert/update 中，undefined 會被忽略或設為預設 null
+    }
+    // 簡單檢查是否為 UUID 格式 (8-4-4-4-12)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (typeof id === 'string' && !uuidRegex.test(id)) {
+      return undefined;
+    }
+    return id;
   }
 
   // System AI Config Methods
@@ -145,7 +160,7 @@ export class SupabaseAdapter implements StorageAdapter {
     provider: AIProvider,
     model: string,
     apiKey: string,
-    apiEndpoint?: string
+    _apiEndpoint?: string
   ): Promise<StorageResponse<{ success: boolean; message: string }>> {
     try {
       console.log(`🧪 測試 ${provider} API 連線...`);
@@ -263,7 +278,7 @@ export class SupabaseAdapter implements StorageAdapter {
         return { data: null, error: new Error('Missing Supabase credentials') };
       }
 
-      const isLocal = supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1');
+      const _isLocal = supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1');
       const functionName = 'rag-platform';
       const routePath = '/embed';
       const baseUrl = supabaseUrl.replace(/\/$/, '');
@@ -357,34 +372,6 @@ export class SupabaseAdapter implements StorageAdapter {
           return id && (typeof id === 'string' || typeof id === 'number');
         });
 
-        /*
-        const sourceIds = documents.map((d: any) => d.metadata?.source_id || d.metadata?.id).filter(Boolean);
-
-        if (sourceIds.length > 0) {
-          const schemaName = getSchemaName();
-          // 🔥 strict validation: check id AND project_id AND archived=false
-          // Note: Temporarily disabled because source_id from PDF upload might not match artifacts table if items table migration is WIP
-          const { data: validArtifacts } = await this.supabase
-            .schema(schemaName)
-            .from('artifacts')
-            .select('id, meta, original_content')
-            .in('id', sourceIds)
-            .eq('project_id', projectId)
-            .eq('archived', false);
-
-          const validIdSet = new Set(validArtifacts?.map(a => a.id));
-
-          // 2. Second Pass: Filter out docs that don't match a VALID artifact in DB
-          documents = documents.filter((d: any) => {
-             // For now, trust the RAG result. If we strictly filter against artifacts, we might lose valid PDF chunks 
-             // if the artifact mapping is complex (or if it's in 'items' table effectively).
-             return true; 
-             // const id = d.metadata?.source_id || d.metadata?.id;
-             // return id && validIdSet.has(id);
-          });
-        }
-        */
-
         // 🧹 Deduplication: Remove identical chunks (same content)
         const seenContent = new Set();
         documents = documents.filter((d: any) => {
@@ -392,130 +379,239 @@ export class SupabaseAdapter implements StorageAdapter {
           if (seenContent.has(contentSig)) return false;
           seenContent.add(contentSig);
           return true;
-          return { data: { documents }, error: null };
-
-        } catch (err) {
-          console.warn('⚠️ [queryKnowledgeBase] Remote RAG failed, falling back to local keyword search:', err);
-
-          // 2. Fallback: Local Keyword Search (Client-side)
-          try {
-            const schemaName = getSchemaName();
-            // Fetch recent artifacts (limit 20 to avoid performance hit)
-            const { data: artifacts, error } = await this.supabase
-              .schema(schemaName)
-              .from('artifacts')
-              .select('*')
-              .eq('project_id', projectId)
-              .eq('archived', false) // 🔥 Fix: Don't search archived/deleted files
-              .order('created_at', { ascending: false })
-              .limit(20);
-
-            if (error || !artifacts) {
-              return { data: { documents: [] }, error: null };
-            }
-
-            const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
-
-            let matchedDocs = artifacts.map(artifact => {
-              let score = 0;
-              const content = (artifact.original_content || '').toLowerCase();
-              const title = (artifact.meta?.file_name || artifact.id).toLowerCase();
-
-              // Basic scoring
-              keywords.forEach(keyword => {
-                if (content.includes(keyword)) score += 2;
-                if (title.includes(keyword)) score += 5;
-              });
-
-              // Recent boost
-              const ageHours = (Date.now() - new Date(artifact.created_at).getTime()) / (1000 * 60 * 60);
-              if (ageHours < 24) score += 1;
-
-              return {
-                id: artifact.id,
-                content: artifact.original_content || '[Binary File]',
-                metadata: {
-                  title: artifact.meta?.file_name || 'Untitled',
-                  source_id: artifact.id,
-                  type: artifact.content_type,
-                  created_at: artifact.created_at
-                },
-                similarity: score
-              };
-            });
-
-            // Filter and sort
-            matchedDocs = matchedDocs.filter(d => d.similarity > 0);
-
-            // If still no matches, just return valid recent text files (context fallback)
-            if (matchedDocs.length === 0) {
-              matchedDocs = artifacts
-                .filter(a => a.content_type?.startsWith('text/') || !a.content_type)
-                .map(artifact => ({
-                  id: artifact.id,
-                  content: artifact.original_content || '[Binary File]',
-                  metadata: {
-                    title: artifact.meta?.file_name || 'Untitled',
-                    source_id: artifact.id,
-                    type: artifact.content_type,
-                    created_at: artifact.created_at
-                  },
-                  similarity: 0.1
-                }));
-            }
-
-            matchedDocs.sort((a, b) => b.similarity - a.similarity);
-            return { data: { documents: matchedDocs.slice(0, matchCount) }, error: null };
-
-          } catch (fallbackErr) {
-            console.error('❌ [queryKnowledgeBase] Fallback failed:', fallbackErr);
-            return { data: { documents: [] }, error: null };
-          }
-        }
+        });
       }
+
+      return { data: { documents }, error: null };
+
+    } catch (err) {
+      console.warn('⚠️ [queryKnowledgeBase] Remote RAG failed, falling back to local keyword search:', err);
+
+      // 2. Fallback: Local Keyword Search (Client-side)
+      try {
+        const schemaName = getSchemaName();
+        // Fetch recent artifacts (limit 20 to avoid performance hit)
+        const { data: artifacts, error } = await this.supabase
+          .schema(schemaName)
+          .from('artifacts')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('archived', false) // 🔥 Fix: Don't search archived/deleted files
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (error || !artifacts) {
+          return { data: { documents: [] }, error: null };
+        }
+
+        const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+
+        let matchedDocs = artifacts.map(artifact => {
+          let score = 0;
+          const content = (artifact.original_content || '').toLowerCase();
+          const title = (artifact.meta?.file_name || artifact.id).toLowerCase();
+
+          // Basic scoring
+          keywords.forEach(keyword => {
+            if (content.includes(keyword)) score += 2;
+            if (title.includes(keyword)) score += 5;
+          });
+
+          // Recent boost
+          const ageHours = (Date.now() - new Date(artifact.created_at).getTime()) / (1000 * 60 * 60);
+          if (ageHours < 24) score += 1;
+
+          return {
+            id: artifact.id,
+            content: artifact.original_content || '[Binary File]',
+            metadata: {
+              title: artifact.meta?.file_name || 'Untitled',
+              source_id: artifact.id,
+              type: artifact.content_type,
+              created_at: artifact.created_at
+            },
+            similarity: score
+          };
+        });
+
+        // Filter and sort
+        matchedDocs = matchedDocs.filter(d => d.similarity > 0);
+
+        // If still no matches, just return valid recent text files (context fallback)
+        if (matchedDocs.length === 0) {
+          matchedDocs = artifacts
+            .filter(a => a.content_type?.startsWith('text/') || !a.content_type)
+            .map(artifact => ({
+              id: artifact.id,
+              content: artifact.original_content || '[Binary File]',
+              metadata: {
+                title: artifact.meta?.file_name || 'Untitled',
+                source_id: artifact.id,
+                type: artifact.content_type,
+                created_at: artifact.created_at
+              },
+              similarity: 0.1
+            }));
+        }
+
+        matchedDocs.sort((a, b) => b.similarity - a.similarity);
+        return { data: { documents: matchedDocs.slice(0, matchCount) }, error: null };
+
+      } catch (fallbackErr) {
+        console.error('❌ [queryKnowledgeBase] Fallback failed:', fallbackErr);
+        return { data: { documents: [] }, error: null };
+      }
+    }
+  }
+  /**
+   * 為任務產生 Embedding 並存入 items.embedding
+   */
+  async embedTask(
+    taskId: string,
+    title: string,
+    description: string,
+    projectId: string
+  ): Promise<StorageResponse<{ success: boolean }>> {
+    try {
+      console.log('🧠 [embedTask] Starting task embedding...', { taskId, title });
+
+      const supabaseUrl = localStorage.getItem('supabase_url');
+      const publicAnonKey = localStorage.getItem('supabase_anon_key');
+
+      if (!supabaseUrl || !publicAnonKey) {
+        return { data: { success: false }, error: new Error('Missing Supabase credentials') };
+      }
+
+      const functionName = 'rag-platform';
+      const baseUrl = supabaseUrl.replace(/\/$/, '');
+      const functionUrl = `${baseUrl}/functions/v1/${functionName}`;
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${publicAnonKey}`
+        },
+        body: JSON.stringify({
+          action: 'embed-task',
+          task_id: taskId,
+          title,
+          description: description || '',
+          project_id: projectId
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ [embedTask] Embedding failed:', errorData);
+        return { data: { success: false }, error: new Error(errorData.error || response.statusText) };
+      }
+
+      console.log('✅ [embedTask] Task embedding successful!');
+      return { data: { success: true }, error: null };
+    } catch (err) {
+      console.error('❌ [embedTask] Exception:', err);
+      return { data: { success: false }, error: err as Error };
+    }
+  }
+
+  /**
+   * 搜尋與查詢語義相似的任務
+   */
+  async matchTasks(
+    query: string,
+    projectId: string,
+    matchCount = 5,
+    threshold = 0.3
+  ): Promise<StorageResponse<any[]>> {
+    try {
+      console.log('🔍 [matchTasks] Searching for similar tasks...', { query, projectId });
+
+      const supabaseUrl = localStorage.getItem('supabase_url');
+      const publicAnonKey = localStorage.getItem('supabase_anon_key');
+
+      if (!supabaseUrl || !publicAnonKey) {
+        console.warn('⚠️ [matchTasks] Missing credentials, returning empty results');
+        return { data: [], error: null };
+      }
+
+      const functionName = 'rag-platform';
+      const baseUrl = supabaseUrl.replace(/\/$/, '');
+      const functionUrl = `${baseUrl}/functions/v1/${functionName}`;
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${publicAnonKey}`
+        },
+        body: JSON.stringify({
+          action: 'query',
+          search_type: 'tasks',
+          query,
+          project_id: projectId,
+          match_count: matchCount,
+          threshold
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ [matchTasks] Search failed:', errorData);
+        return { data: [], error: new Error(errorData.error || response.statusText) };
+      }
+
+      const result = await response.json();
+      console.log(`✅ [matchTasks] Found ${result.documents?.length || 0} similar tasks`);
+      return { data: result.documents || [], error: null };
+    } catch (err) {
+      console.error('❌ [matchTasks] Exception:', err);
+      return { data: [], error: err as Error };
+    }
+  }
 
   // System Prompts Methods
   async getSystemPrompts(
-        projectId: string
-      ): Promise < StorageResponse < SystemPromptConfig >> {
-        try {
-          console.log('🔍 [getSystemPrompts] 開始查詢 system_prompts，projectId:', projectId);
+    projectId: string
+  ): Promise<StorageResponse<SystemPromptConfig>> {
+    try {
+      console.log('🔍 [getSystemPrompts] 開始查詢 system_prompts，projectId:', projectId);
 
-          const { data, error } = await this.supabase
-            .schema('aiproject')
-            .from('system_prompts')
-            .select('*')
-            .eq('project_id', projectId)
-            .maybeSingle();
+      const { data, error } = await this.supabase
+        .schema('aiproject')
+        .from('system_prompts')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle();
 
-          if(error) {
-            console.error('❌ [getSystemPrompts] Supabase 查詢錯誤:', error);
-            return { data: null as any, error: new Error(error.message) };
-          }
+      if (error) {
+        console.error('❌ [getSystemPrompts] Supabase 查詢錯誤:', error);
+        return { data: null as any, error: new Error(error.message) };
+      }
 
       // 🔥 如果沒有設定，回傳 prompts.ts 中定義的預設值（而非空字串）
-      if(!data) {
-            console.log('⚠️ [getSystemPrompts] 查無資料，回傳 prompts.ts 預值');
-            const defaultPrompts: SystemPromptConfig = {
-              wbs_parser: WBS_PARSER_PROMPT,
-              intent_classification: generateSystemPrompt(),
-              few_shot_examples: generateFewShotPrompt(),
-              prompt_templates: DEFAULT_PROMPT_TEMPLATES // 🔥 新增預設模板
-            };
-            console.log('📋 [getSystemPrompts] 預設值長度:', {
-              wbs_parser: defaultPrompts.wbs_parser.length,
-              intent_classification: defaultPrompts.intent_classification.length,
-              few_shot_examples: defaultPrompts.few_shot_examples.length,
-              prompt_templates: defaultPrompts.prompt_templates.length
-            });
-            return {
-              data: defaultPrompts,
-              error: null
-            };
-          }
+      if (!data) {
+        console.log('⚠️ [getSystemPrompts] 查無資料，回傳 prompts.ts 預設值');
+        const defaultPrompts: SystemPromptConfig = {
+          wbs_parser: WBS_PARSER_PROMPT,
+          intent_classification: generateSystemPrompt(),
+          few_shot_examples: generateFewShotPrompt(),
+          prompt_templates: DEFAULT_PROMPT_TEMPLATES // 🔥 新增預設模板
+        };
+        console.log('📋 [getSystemPrompts] 預設值長度:', {
+          wbs_parser: defaultPrompts.wbs_parser?.length || 0,
+          intent_classification: defaultPrompts.intent_classification?.length || 0,
+          few_shot_examples: defaultPrompts.few_shot_examples?.length || 0,
+          prompt_templates: defaultPrompts.prompt_templates?.length || 0
+        });
+        return {
+          data: defaultPrompts,
+          error: null
+        };
+      }
 
       // 🔥 如果 prompt_templates 欄位不存在，補上預設值
-      if(!data.prompt_templates) {
+      if (!data.prompt_templates) {
         data.prompt_templates = DEFAULT_PROMPT_TEMPLATES;
       }
 
@@ -627,6 +723,10 @@ export class SupabaseAdapter implements StorageAdapter {
     updatedBy?: string
   ): Promise<StorageResponse<SystemPromptConfig>> {
     try {
+      if (!this.isValidUUID(projectId)) {
+        return { data: null as any, error: new Error(`Invalid Project ID: ${projectId}`) };
+      }
+
       // 先取得現有的 system_prompts
       const { data: currentData, error: fetchError } = await this.supabase
         .schema('aiproject')
@@ -670,7 +770,7 @@ export class SupabaseAdapter implements StorageAdapter {
 
         return { data, error: null };
       } else {
-        // 如果不存在，��增記錄
+        // 如果不存在，新增記錄
         const { data, error } = await this.supabase
           .schema('aiproject')
           .from('system_prompts')
@@ -693,6 +793,65 @@ export class SupabaseAdapter implements StorageAdapter {
     } catch (err) {
       console.error('resetSystemPrompt exception:', err);
       return { data: null as any, error: err as Error };
+    }
+  }
+
+  async pruneOrphanedFiles(projectId: string): Promise<StorageResponse<{ deletedCount: number }>> {
+    try {
+      if (!this.isValidUUID(projectId)) {
+        console.warn(`[SupabaseAdapter] pruneOrphanedFiles ignored invalid UUID: ${projectId}`);
+        return { data: { deletedCount: 0 }, error: null };
+      }
+
+      console.log('🧹 開始深度清理孤兒檔案:', projectId);
+      const schemaName = getSchemaName();
+
+      // 1. List all files in storage
+      // Note: This lists files in the folder named {projectId}
+      const { data: storageFiles, error: listError } = await this.supabase.storage
+        .from('aiproject-files')
+        .list(projectId, { limit: 1000 });
+
+      if (listError) throw listError;
+      if (!storageFiles || storageFiles.length === 0) {
+        return { data: { deletedCount: 0 }, error: null };
+      }
+
+      // 2. List all artifact storage_paths in DB
+      const { data: dbArtifacts, error: dbError } = await this.supabase
+        .schema(schemaName)
+        .from('artifacts')
+        .select('storage_path')
+        .eq('project_id', projectId)
+        .not('storage_path', 'is', null);
+
+      if (dbError) throw dbError;
+
+      const validPaths = new Set(dbArtifacts?.map(a => a.storage_path) || []);
+
+      // 3. Identify orphaned files
+      const orphanedFilePaths = storageFiles
+        .filter(file => file.name !== '.emptyFolderPlaceholder' && !validPaths.has(`${projectId}/${file.name}`))
+        .map(file => `${projectId}/${file.name}`);
+
+      if (orphanedFilePaths.length === 0) {
+        console.log('✅ 無孤兒檔案需要清理。');
+        return { data: { deletedCount: 0 }, error: null };
+      }
+
+      // 4. Delete orphaned files from storage
+      console.log(`🗑️ 發現 ${orphanedFilePaths.length} 個孤兒檔案，開始刪除...`);
+      const { error: deleteError } = await this.supabase.storage
+        .from('aiproject-files')
+        .remove(orphanedFilePaths);
+
+      if (deleteError) throw deleteError;
+
+      console.log(`✅ 成功刪除 ${orphanedFilePaths.length} 個孤兒檔案。`);
+      return { data: { deletedCount: orphanedFilePaths.length }, error: null };
+    } catch (err) {
+      console.error('❌ [pruneOrphanedFiles] 異常:', err);
+      return { data: { deletedCount: 0 }, error: err as Error };
     }
   }
 
@@ -746,8 +905,17 @@ export class SupabaseAdapter implements StorageAdapter {
     }
   }
 
+  private isValidUUID(uuid: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
+  }
+
   async getProjectById(id: string): Promise<StorageResponse<Project>> {
     try {
+      if (!this.isValidUUID(id)) {
+        console.warn(`[SupabaseAdapter] getProjectById ignored invalid UUID: ${id}`);
+        return { data: null, error: new Error('Project not found (Invalid ID)') };
+      }
+
       const schemaName = getSchemaName();
       const { data, error } = await this.supabase
         .schema(schemaName)
@@ -877,6 +1045,11 @@ export class SupabaseAdapter implements StorageAdapter {
 
   async getMembers(projectId: string): Promise<StorageResponse<Member[]>> {
     try {
+      if (!this.isValidUUID(projectId)) {
+        console.warn(`[SupabaseAdapter] getMembers ignored invalid UUID: ${projectId}`);
+        return { data: [], error: null };
+      }
+
       const schemaName = getSchemaName();
       const { data, error } = await this.supabase
         .schema(schemaName)
@@ -1096,9 +1269,9 @@ export class SupabaseAdapter implements StorageAdapter {
 
   /**
    * 呼叫 Edge Function 刪除 Supabase Auth 使用者
-   * 需要後端 Service Role Key 權限
+   * 需要後端 Service Role Key 權限 (暫未被外部調用)
    */
-  private async deleteAuthUser(userId: string, email: string): Promise<void> {
+  private async _deleteAuthUser(userId: string, email: string): Promise<void> {
     try {
       const supabaseUrl = localStorage.getItem('supabase_url');
       const publicAnonKey = localStorage.getItem('supabase_anon_key');
@@ -1213,6 +1386,10 @@ export class SupabaseAdapter implements StorageAdapter {
 
   async getArtifactById(id: string): Promise<StorageResponse<Artifact>> {
     try {
+      if (!this.isValidUUID(id)) {
+        return { data: null, error: new Error('Artifact not found (Invalid ID)') };
+      }
+
       const schemaName = getSchemaName();
       const { data, error } = await this.supabase
         .schema(schemaName)
@@ -1289,8 +1466,6 @@ export class SupabaseAdapter implements StorageAdapter {
       return { data: null, error: err as Error };
     }
   }
-
-
 
   // File Storage Methods (Supabase Storage)
   async uploadFile(projectId: string, file: File): Promise<StorageResponse<{
@@ -1461,6 +1636,10 @@ export class SupabaseAdapter implements StorageAdapter {
 
   async deleteArtifact(id: string): Promise<StorageResponse<void>> {
     try {
+      if (!this.isValidUUID(id)) {
+        return { data: null, error: new Error('Invalid Artifact ID') };
+      }
+
       const schemaName = getSchemaName();
 
       // 1. Fetch artifact to get storage_path
@@ -1508,86 +1687,18 @@ export class SupabaseAdapter implements StorageAdapter {
     }
   }
 
-  async pruneOrphanedFiles(projectId: string): Promise<StorageResponse<{ deletedCount: number }>> {
-    try {
-      console.log('🧹 開始深度清理孤兒檔案:', projectId);
-      const schemaName = getSchemaName();
-
-      // 1. List all files in storage
-      // Note: This lists files in the folder named {projectId}
-      const { data: storageFiles, error: listError } = await this.supabase.storage
-        .from('aiproject-files')
-        .list(projectId, { limit: 1000 });
-
-      if (listError) throw listError;
-      if (!storageFiles || storageFiles.length === 0) {
-        return { data: { deletedCount: 0 }, error: null };
-      }
-
-      // 2. List all artifact storage_paths in DB
-      const { data: dbArtifacts, error: dbError } = await this.supabase
-        .schema(schemaName)
-        .from('artifacts')
-        .select('storage_path')
-        .eq('project_id', projectId)
-        .not('storage_path', 'is', null);
-
-      if (dbError) throw dbError;
-
-      const validPaths = new Set(dbArtifacts?.map(a => a.storage_path) || []);
-      const orphanedFiles: string[] = [];
-
-      // 3. Compare
-      for (const file of storageFiles) {
-        if (file.name === '.emptyFolderPlaceholder') continue;
-
-        // Supabase list returns filenames (e.g. "abc.pdf").
-        // But storage_path is stored as "projectId/filename" (e.g. "uuid/abc.pdf").
-        // We must construct the full path to match DB or use logic carefully.
-        const fullPath = `${projectId}/${file.name}`;
-
-        if (!validPaths.has(fullPath)) {
-          console.log('ATTRIP: Found orphan:', fullPath);
-          orphanedFiles.push(fullPath);
-        }
-      }
-
-      console.log(`🔍 掃描結果: 總檔案 ${storageFiles.length}, 孤兒檔案 ${orphanedFiles.length}`);
-
-      if (orphanedFiles.length === 0) {
-        return { data: { deletedCount: 0 }, error: null };
-      }
-
-      // 4. Delete orphans
-      const { error: deleteError } = await this.supabase.storage
-        .from('aiproject-files')
-        .remove(orphanedFiles);
-
-      if (deleteError) throw deleteError;
-
-      return { data: { deletedCount: orphanedFiles.length }, error: null };
-    } catch (error) {
-      console.error('❌ Prune orphaned files error:', error);
-      return { data: null, error: error as Error };
-    }
-  }
-
   async getItems(projectId: string, filters?: { status?: ItemStatus; type?: ItemType }): Promise<StorageResponse<Item[]>> {
     try {
       const schemaName = getSchemaName();
-
-      // 檢查是否為 Local Phase ID (例如: proj_nmth_001)
-      // Local Phase ID 不是 UUID 格式，無法接查詢
-      const isLocalId = !projectId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 
       let query = this.supabase
         .schema(schemaName)
         .from('items')
         .select('*');
 
-      // 如果是 Local Phase ID，查詢所有項目（因為 Supabase 階段通常只有一個專案）
-      // 如果是有效的 UUID，則進行精確查詢
-      if (!isLocalId) {
+      // 只有有效的 UUID 才進行 project_id 過濾
+      // Local ID 或無效 ID 則不加此條件（可能回傳空或全部，視 RLS 而定，但在本 Adapter 中保留此行為以相容舊邏輯）
+      if (this.isValidUUID(projectId)) {
         query = query.eq('project_id', projectId);
       }
 
@@ -1615,12 +1726,17 @@ export class SupabaseAdapter implements StorageAdapter {
 
   async getItemById(id: string): Promise<StorageResponse<Item>> {
     try {
+      const sanitizedId = this._sanitizeUUID(id);
+      if (!sanitizedId) {
+        return { data: null, error: new Error('Item not found (Invalid ID)') };
+      }
+
       const schemaName = getSchemaName();
       const { data, error } = await this.supabase
         .schema(schemaName)
         .from('items')
         .select('*')
-        .eq('id', id)
+        .eq('id', sanitizedId)
         .maybeSingle();
 
       if (error) {
@@ -1646,17 +1762,17 @@ export class SupabaseAdapter implements StorageAdapter {
         .schema(schemaName)
         .from('items')
         .insert({
-          project_id: item.project_id,
+          project_id: this._sanitizeUUID(item.project_id),
           type: item.type,
           status: item.status,
           title: item.title,
           description: item.description,
-          assignee_id: item.assignee_id || null,
-          work_package_id: item.work_package_id || null,
-          parent_id: item.parent_id || null,
+          assignee_id: this._sanitizeUUID(item.assignee_id),
+          work_package_id: this._sanitizeUUID(item.work_package_id),
+          parent_id: this._sanitizeUUID(item.parent_id),
           due_date: item.due_date || null,
           priority: item.priority || 'medium',
-          source_artifact_id: item.source_artifact_id || null,
+          source_artifact_id: this._sanitizeUUID(item.source_artifact_id),
           notes: item.notes || null,
           notes_updated_at: item.notes_updated_at || null,
           notes_updated_by: item.notes_updated_by || null,
@@ -1670,6 +1786,18 @@ export class SupabaseAdapter implements StorageAdapter {
         return { data: null, error: new Error(error.message) };
       }
 
+      // 🔥 自動向量化（非同步，不阻塞回應）
+      if (data) {
+        this.embedTask(
+          data.id,
+          data.title,
+          data.description || '',
+          data.project_id
+        ).catch(err => {
+          console.warn('⚠️ Auto-embedding failed (non-blocking):', err);
+        });
+      }
+
       return { data, error: null };
     } catch (err) {
       console.error('createItem exception:', err);
@@ -1680,10 +1808,18 @@ export class SupabaseAdapter implements StorageAdapter {
   async updateItem(id: string, updates: Partial<Omit<Item, 'id' | 'created_at'>>): Promise<StorageResponse<Item>> {
     try {
       const schemaName = getSchemaName();
+
+      // 清理更新對象中的 UUID 欄位
+      const sanitizedUpdates = { ...updates };
+      if ('parent_id' in sanitizedUpdates) sanitizedUpdates.parent_id = this._sanitizeUUID(sanitizedUpdates.parent_id);
+      if ('work_package_id' in sanitizedUpdates) sanitizedUpdates.work_package_id = this._sanitizeUUID(sanitizedUpdates.work_package_id);
+      if ('assignee_id' in sanitizedUpdates) sanitizedUpdates.assignee_id = this._sanitizeUUID(sanitizedUpdates.assignee_id);
+      if ('source_artifact_id' in sanitizedUpdates) sanitizedUpdates.source_artifact_id = this._sanitizeUUID(sanitizedUpdates.source_artifact_id);
+
       const { data, error } = await this.supabase
         .schema(schemaName)
         .from('items')
-        .update(updates)
+        .update(sanitizedUpdates)
         .eq('id', id)
         .select()
         .single();
@@ -1691,6 +1827,18 @@ export class SupabaseAdapter implements StorageAdapter {
       if (error) {
         console.error('Supabase updateItem error:', error);
         return { data: null, error: new Error(error.message) };
+      }
+
+      // 🔥 如果標題或描述變更，重新向量化
+      if (data && (updates.title || updates.description)) {
+        this.embedTask(
+          data.id,
+          data.title,
+          data.description || '',
+          data.project_id
+        ).catch(err => {
+          console.warn('⚠️ Re-embedding failed (non-blocking):', err);
+        });
       }
 
       return { data, error: null };
@@ -1725,6 +1873,10 @@ export class SupabaseAdapter implements StorageAdapter {
 
   async deleteItem(id: string): Promise<StorageResponse<void>> {
     try {
+      if (!this.isValidUUID(id)) {
+        return { data: null, error: new Error('Invalid Item ID') };
+      }
+
       const schemaName = getSchemaName();
       const { error } = await this.supabase
         .schema(schemaName)
@@ -1792,17 +1944,17 @@ export class SupabaseAdapter implements StorageAdapter {
     throw new Error('Method not implemented.');
   }
 
-  async updateGlobalConfig(updates: Partial<GlobalConfig>): Promise<StorageResponse<GlobalConfig>> {
+  async updateGlobalConfig(_updates: Partial<GlobalConfig>): Promise<StorageResponse<GlobalConfig>> {
     // TODO: 實作 Supabase 更新
     throw new Error('Method not implemented.');
   }
 
-  async getProjectConfig(projectId: string): Promise<StorageResponse<ProjectConfig>> {
+  async getProjectConfig(_projectId: string): Promise<StorageResponse<ProjectConfig>> {
     // TODO: 實作 Supabase 查詢
     throw new Error('Method not implemented.');
   }
 
-  async updateProjectConfig(projectId: string, updates: Partial<ProjectConfig>): Promise<StorageResponse<ProjectConfig>> {
+  async updateProjectConfig(_projectId: string, _updates: Partial<ProjectConfig>): Promise<StorageResponse<ProjectConfig>> {
     // TODO: 實作 Supabase 更新
     throw new Error('Method not implemented.');
   }
@@ -1879,68 +2031,68 @@ export class SupabaseAdapter implements StorageAdapter {
     }
   }
 
-  async getModules(projectId: string): Promise<StorageResponse<Module[]>> {
+  async getModules(_projectId: string): Promise<StorageResponse<Module[]>> {
     // TODO: 實作 Supabase 查詢
     return { data: [], error: null };
   }
 
-  async createModule(module: Omit<Module, 'id' | 'created_at'>): Promise<StorageResponse<Module>> {
+  async createModule(_module: Omit<Module, 'id' | 'created_at'>): Promise<StorageResponse<Module>> {
     // TODO: 實作 Supabase 插入
     throw new Error('Method not implemented.');
   }
 
-  async updateModule(id: string, updates: Partial<Omit<Module, 'id' | 'created_at'>>): Promise<StorageResponse<Module>> {
+  async updateModule(_id: string, _updates: Partial<Omit<Module, 'id' | 'created_at'>>): Promise<StorageResponse<Module>> {
     // TODO: 實作 Supabase 更新
     throw new Error('Method not implemented.');
   }
 
-  async deleteModule(id: string): Promise<StorageResponse<void>> {
+  async deleteModule(_id: string): Promise<StorageResponse<void>> {
     // TODO: 實作 Supabase 刪除
     throw new Error('Method not implemented.');
   }
 
-  async getPages(projectId: string): Promise<StorageResponse<Page[]>> {
+  async getPages(_projectId: string): Promise<StorageResponse<Page[]>> {
     // TODO: 實作 Supabase 查詢
     return { data: [], error: null };
   }
 
-  async createPage(page: Omit<Page, 'id' | 'created_at'>): Promise<StorageResponse<Page>> {
+  async createPage(_page: Omit<Page, 'id' | 'created_at'>): Promise<StorageResponse<Page>> {
     // TODO: 實作 Supabase 插入
     throw new Error('Method not implemented.');
   }
 
-  async updatePage(id: string, updates: Partial<Omit<Page, 'id' | 'created_at'>>): Promise<StorageResponse<Page>> {
+  async updatePage(_id: string, _updates: Partial<Omit<Page, 'id' | 'created_at'>>): Promise<StorageResponse<Page>> {
     // TODO: 實作 Supabase 更新
     throw new Error('Method not implemented.');
   }
 
-  async deletePage(id: string): Promise<StorageResponse<void>> {
+  async deletePage(_id: string): Promise<StorageResponse<void>> {
     // TODO: 實作 Supabase 刪除
     throw new Error('Method not implemented.');
   }
 
-  async getMilestones(projectId: string): Promise<StorageResponse<Milestone[]>> {
+  async getMilestones(_projectId: string): Promise<StorageResponse<Milestone[]>> {
     // TODO: 實作 Supabase 查詢
     return { data: [], error: null };
   }
 
-  async createMilestone(milestone: Omit<Milestone, 'id' | 'created_at'>): Promise<StorageResponse<Milestone>> {
+  async createMilestone(_milestone: Omit<Milestone, 'id' | 'created_at'>): Promise<StorageResponse<Milestone>> {
     // TODO: 實作 Supabase 插入
     throw new Error('Method not implemented.');
   }
 
-  async updateMilestone(id: string, updates: Partial<Omit<Milestone, 'id' | 'created_at'>>): Promise<StorageResponse<Milestone>> {
+  async updateMilestone(_id: string, _updates: Partial<Omit<Milestone, 'id' | 'created_at'>>): Promise<StorageResponse<Milestone>> {
     // TODO: 實作 Supabase 更新
     throw new Error('Method not implemented.');
   }
 
-  async deleteMilestone(id: string): Promise<StorageResponse<void>> {
+  async deleteMilestone(_id: string): Promise<StorageResponse<void>> {
     // TODO: 實作 Supabase 刪除
     throw new Error('Method not implemented.');
   }
 
   // 🔥 DEPRECATED: 舊版 work_packages 表已棄用，改用 items 表中的 isWorkPackage 項目
-  async getWorkPackages(projectId: string): Promise<StorageResponse<WorkPackage[]>> {
+  async getWorkPackages(_projectId: string): Promise<StorageResponse<WorkPackage[]>> {
     // Return empty array to deprecate old table
     console.warn('[DEPRECATED] getWorkPackages: This method is deprecated. Use items with meta.isWorkPackage instead.');
     return { data: [], error: null };
@@ -2036,23 +2188,52 @@ export class SupabaseAdapter implements StorageAdapter {
     }
   }
 
-  async getWorkActivities(projectId: string): Promise<StorageResponse<WorkActivity[]>> {
+  async getWorkActivities(_projectId: string): Promise<StorageResponse<WorkActivity[]>> {
     // TODO: 實作 Supabase 查詢
     return { data: [], error: null };
   }
 
-  async createWorkActivity(workActivity: Omit<WorkActivity, 'id' | 'created_at'>): Promise<StorageResponse<WorkActivity>> {
+  async createWorkActivity(_workActivity: Omit<WorkActivity, 'id' | 'created_at'>): Promise<StorageResponse<WorkActivity>> {
     // TODO: 實作 Supabase 插入
     throw new Error('Method not implemented.');
   }
 
-  async updateWorkActivity(id: string, updates: Partial<Omit<WorkActivity, 'id' | 'created_at'>>): Promise<StorageResponse<WorkActivity>> {
+  async updateWorkActivity(_id: string, _updates: Partial<Omit<WorkActivity, 'id' | 'created_at'>>): Promise<StorageResponse<WorkActivity>> {
     // TODO: 實作 Supabase 更新
     throw new Error('Method not implemented.');
   }
 
-  async deleteWorkActivity(id: string): Promise<StorageResponse<void>> {
+  async deleteWorkActivity(_id: string): Promise<StorageResponse<void>> {
     // TODO: 實作 Supabase 刪除
     throw new Error('Method not implemented.');
+  }
+
+  async saveAIFeedback(feedback: Omit<AIFeedback, 'id' | 'created_at'>): Promise<StorageResponse<AIFeedback>> {
+    try {
+      const schemaName = getSchemaName();
+      const { data, error } = await this.supabase
+        .schema(schemaName)
+        .from('ai_feedback')
+        .insert({
+          project_id: feedback.project_id,
+          artifact_id: feedback.artifact_id,
+          chunk_text: feedback.chunk_text,
+          original_mapping: feedback.original_mapping,
+          corrected_mapping: feedback.corrected_mapping,
+          feedback_type: feedback.feedback_type,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase saveAIFeedback error:', error);
+        return { data: null, error: new Error(error.message) };
+      }
+
+      return { data, error: null };
+    } catch (err) {
+      console.error('saveAIFeedback exception:', err);
+      return { data: null, error: err as Error };
+    }
   }
 }

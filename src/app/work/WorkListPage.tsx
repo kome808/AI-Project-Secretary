@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useProject } from '../context/ProjectContext';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { getStorageClient } from '../../lib/storage';
 import { WorkPackage, Member, Item, Milestone } from '../../lib/storage/types';
-import { toast } from 'sonner';
 
 export function WorkListPage() {
   const { currentProject, isLoading } = useProject();
@@ -51,7 +50,10 @@ export function WorkListPage() {
     if (wpRes.data) setWorkPackages(wpRes.data);
     if (membersRes.data) setMembers(membersRes.data);
     if (milestonesRes.data) setMilestones(milestonesRes.data);
-    if (itemsRes.data) setItems(itemsRes.data);
+    if (itemsRes.data) {
+      // 排除 AI 建議項目 (它們屬於收件匣)
+      setItems(itemsRes.data.filter(item => item.status !== 'suggestion'));
+    }
 
     setLoading(false);
   };
@@ -70,7 +72,7 @@ export function WorkListPage() {
 
   const getRiskInfo = (wp: WorkPackage) => {
     // Get related items for this work package
-    const relatedItems = items.filter(item => 
+    const relatedItems = items.filter(item =>
       item.meta?.work_package_id === wp.id
     );
 
@@ -79,7 +81,7 @@ export function WorkListPage() {
       if (!i.due_date) return false;
       return new Date(i.due_date) < new Date();
     });
-    const hasHighRiskCR = relatedItems.some(i => 
+    const hasHighRiskCR = relatedItems.some(i =>
       i.type === 'cr' && i.meta?.risk_level === 'high'
     );
 
@@ -91,15 +93,15 @@ export function WorkListPage() {
 
   const getCompletionRate = (wp: WorkPackage) => {
     if (wp.completion_rate !== undefined) return wp.completion_rate;
-    
+
     // Calculate from related actions
-    const relatedActions = items.filter(item => 
+    const relatedActions = items.filter(item =>
       item.type === 'action' && item.meta?.work_package_id === wp.id
     );
 
     if (relatedActions.length === 0) return 0;
-    
-    const doneCount = relatedActions.filter(i => i.status === 'done').length;
+
+    const doneCount = relatedActions.filter(i => i.status === 'completed').length;
     return Math.round((doneCount / relatedActions.length) * 100);
   };
 
@@ -153,8 +155,8 @@ export function WorkListPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => navigate('/work/map')}
           >
             <MapPin className="w-4 h-4 mr-2" />
@@ -233,20 +235,19 @@ export function WorkListPage() {
                   >
                     <div className="flex items-start gap-4 flex-1 min-w-0">
                       {/* Status Indicator */}
-                      <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${
-                        wp.status === 'completed' ? 'bg-emerald-500' :
+                      <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${wp.status === 'completed' ? 'bg-emerald-500' :
                         wp.status === 'in_progress' ? 'bg-primary' :
-                        wp.status === 'on_hold' ? 'bg-amber-500' :
-                        'bg-muted-foreground'
-                      }`} />
+                          wp.status === 'on_hold' ? 'bg-amber-500' :
+                            'bg-muted-foreground'
+                        }`} />
 
                       {/* Content */}
                       <div className="flex-1 space-y-2 min-w-0">
                         <div className="flex items-start gap-2">
                           <p className="flex-1 truncate">{wp.title}</p>
                           {riskInfo && (
-                            <Badge 
-                              variant="outline" 
+                            <Badge
+                              variant="outline"
                               className={`shrink-0 text-${riskInfo.color} border-${riskInfo.color}/30 bg-${riskInfo.color}/5`}
                             >
                               <riskInfo.icon className="w-3 h-3 mr-1" />

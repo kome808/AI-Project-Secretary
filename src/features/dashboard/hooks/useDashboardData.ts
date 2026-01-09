@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
 import { useProjectStore } from '@/stores/useProjectStore'
-import { Item, Member } from '@/lib/storage/types'
+import { Item } from '@/lib/storage/types'
 
 export interface NeedsAttentionItem {
     id: string
@@ -23,7 +23,7 @@ export const useDashboardData = () => {
             if (!projectId) return []
             const { data, error } = await apiClient.getItems(projectId)
             if (error) throw error
-            return (data || []).filter(item => item.status !== 'suggestion')
+            return data || []
         },
         enabled: !!projectId,
     })
@@ -110,6 +110,20 @@ function calculateNeedsAttention(allItems: Item[]): NeedsAttentionItem[] {
         })
     })
 
+    // AI Suggestions (Inbox)
+    const suggestions = allItems.filter((item) => item.status === 'suggestion')
+    suggestions.forEach((item) => {
+        attention.push({
+            id: item.id,
+            title: item.title,
+            type: 'pending',
+            typeBadge: 'AI 建議',
+            daysInfo: '等待收件匣確認',
+            priority: 'medium',
+            itemType: 'suggestion',
+        })
+    })
+
     // Sort
     attention.sort((a, b) => {
         const priorityOrder = { overdue: 0, blocked: 1, pending: 2 }
@@ -132,15 +146,17 @@ function generateBriefSummary(allItems: Item[]): string {
     }).length
 
     const blockedCount = allItems.filter((item) => item.status === 'blocked').length
+    const suggestionCount = allItems.filter((item) => item.status === 'suggestion').length
 
     let summary = '早安！'
 
-    if (overdueCount === 0 && blockedCount === 0) {
+    if (overdueCount === 0 && blockedCount === 0 && suggestionCount === 0) {
         summary += '目前專案狀態良好，沒有緊急事項需要處理。'
     } else {
         const issues: string[] = []
         if (overdueCount > 0) issues.push(`${overdueCount} 項任務逾期`)
         if (blockedCount > 0) issues.push(`${blockedCount} 項任務卡關`)
+        if (suggestionCount > 0) issues.push(`${suggestionCount} 項 AI 建議待確認`)
 
         summary += `今天有 ${issues.join('、')}需要您的關注。`
     }

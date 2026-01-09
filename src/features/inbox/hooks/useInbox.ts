@@ -106,6 +106,38 @@ export const useInbox = () => {
         const storage = getStorageClient();
 
         try {
+            // --- 🤖 處理 AI 智慧建議的映射或補充動作 ---
+            if (item.meta?.suggested_action && item.meta.target_id) {
+                const targetId = item.meta.target_id;
+                const { data: targetItem } = await storage.getItemById(targetId);
+
+                if (targetItem) {
+                    if (item.meta.suggested_action === 'map_existing') {
+                        // 映射現有項目：增加備註
+                        const updateNote = `[AI 智慧關聯] 具備相關論述：\n\n"${item.description}"\n\n--- 分析原因: ${item.meta.reasoning || '無'}`;
+                        await storage.updateItem(targetId, {
+                            notes: ((targetItem.notes || '') + '\n\n' + updateNote).trim(),
+                            notes_updated_at: new Date().toISOString(),
+                            notes_updated_by: 'AI Assistant'
+                        });
+                    } else if (item.meta.suggested_action === 'append_spec') {
+                        // 附加規格：更新描述
+                        const specAddition = `\n\n### 補充規格 (${new Date().toLocaleDateString()})\n${item.description}`;
+                        await storage.updateItem(targetId, {
+                            description: (targetItem.description || '') + specAddition
+                        });
+                    }
+
+                    // 完成動作後刪除此建議卡
+                    await storage.deleteItem(item.id);
+                    toast.success('✓ 已完成建議映射/更新');
+                    queryClient.invalidateQueries({ queryKey: ['items', projectId] });
+                    setSelectedIds(prev => prev.filter(id => id !== item.id));
+                    return;
+                }
+            }
+
+            // --- 🏗️ 標準確認流程（建立新項目）---
             // 1. Handle Artifact Creation from pending
             let artifactId = item.source_artifact_id;
 

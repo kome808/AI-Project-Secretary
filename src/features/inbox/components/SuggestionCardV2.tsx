@@ -134,6 +134,20 @@ export function SuggestionCardV2({
             />
           </div>
 
+          {/* Suggested Action Badge */}
+          {item.meta?.suggested_action === 'map_existing' && (
+            <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">
+              <label>映射建議</label>
+            </Badge>
+          )}
+          {item.meta?.suggested_action === 'append_spec' && (
+            <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">
+              <label>規格補充</label>
+            </Badge>
+          )}
+
+          {/* 風險 Badge for CR */}
+
           {/* 風險 Badge for CR */}
           {item.type === 'cr' && riskLevel && (
             <Badge

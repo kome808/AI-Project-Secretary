@@ -39,13 +39,14 @@ import { SupabaseConnectionPage } from '../SupabaseConnectionPage';
 import { SystemPromptsEditor } from '@/features/settings/components/SystemPromptsEditor';
 import { StatusMigrationPanel } from '../StatusMigrationPanel';
 import { StorageFactory } from '../../../lib/storage/StorageFactory';
+import { DataMaintenancePanel } from '../components/DataMaintenancePanel';
 
 interface SystemSettingsProps {
   currentProject?: Project | null;
 }
 
 export function SystemSettings({ currentProject }: SystemSettingsProps) {
-  const [activeView, setActiveView] = useState<'projects' | 'ai' | 'supabase' | 'prompts' | 'migration'>('projects');
+  const [activeView, setActiveView] = useState<'projects' | 'ai' | 'supabase' | 'prompts' | 'migration' | 'maintenance'>('projects');
   const storage = StorageFactory.getAdapter();
 
   return (
@@ -92,6 +93,14 @@ export function SystemSettings({ currentProject }: SystemSettingsProps) {
           <RotateCcw className="w-4 h-4" />
           狀態遷移
         </Button>
+        <Button
+          variant={activeView === 'maintenance' ? 'default' : 'ghost'}
+          onClick={() => setActiveView('maintenance')}
+          className="flex items-center gap-[var(--spacing-2)]"
+        >
+          <Database className="w-4 h-4" />
+          資料維護
+        </Button>
       </div>
 
       {/* Content */}
@@ -104,6 +113,7 @@ export function SystemSettings({ currentProject }: SystemSettingsProps) {
       )}
       {activeView === 'supabase' && <SupabaseConnectionPage />}
       {activeView === 'migration' && <StatusMigrationPanel />}
+      {activeView === 'maintenance' && <DataMaintenancePanel />}
     </div>
   );
 }

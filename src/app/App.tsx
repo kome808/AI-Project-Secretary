@@ -13,7 +13,7 @@ import { WorkListPage } from './work/WorkListPage';
 import { WorkDetailPage } from './work/WorkDetailPage';
 import { SourceDetailPage } from './sources/SourceDetailPage';
 import { MapViewPage } from './work/MapViewPage';
-import { getSupabaseClient } from '../lib/supabase/client';
+import { getSupabaseClient, hasSupabaseConfig } from '../lib/supabase/client';
 import { needsMigration, migrateAllItemsStatus } from '../lib/storage/statusMigration';
 import '../lib/permissions/devTools'; // Load development permission tools
 import { DevUserSwitcher } from '@/lib/permissions/devTools';
@@ -23,8 +23,15 @@ import ResetPasswordPage from './auth/ResetPasswordPage';
 import ForgotPasswordPage from './auth/ForgotPasswordPage';
 import AuthErrorPage from './auth/AuthErrorPage';
 import NoProjectPage from './auth/NoProjectPage';
+import SetupPage from './auth/SetupPage';
+
+import { LandingPage } from './landing/LandingPage';
 
 const router = createHashRouter([
+  {
+    path: '/',
+    element: <LandingPage />,
+  },
   {
     path: '/login',
     element: <LoginPage />,
@@ -42,7 +49,7 @@ const router = createHashRouter([
     element: <NoProjectPage />,
   },
   {
-    path: '/',
+    path: '/app',
     element: <AppLayout />,
     children: [
       { index: true, element: <DashboardPage /> },
@@ -65,6 +72,12 @@ const router = createHashRouter([
 ]);
 
 export default function App() {
+  // 0. Configuration Check
+  // If Supabase config is missing, show Setup Page immediately
+  if (!hasSupabaseConfig()) {
+    return <SetupPage />;
+  }
+
   useEffect(() => {
     // 1. Status Migration Check
     console.log('🔄 執行狀態遷移檢查...');
@@ -85,22 +98,26 @@ export default function App() {
     if (!currentUser && import.meta.env.DEV) {
       console.log('🔧 開發模式：未檢測到用戶，自動設定為 ADMIN');
       DevUserSwitcher.setAdmin();
-    } else {
+    } else if (currentUser) {
       console.log('✅ 已有用戶登入:', JSON.parse(currentUser));
     }
 
     // 3. 監聽 Auth 狀態 (處理重設密碼跳轉)
-    const supabase = getSupabaseClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        console.log('🔄 偵測到密碼重設請求，正在跳轉...');
-        router.navigate('/reset-password');
-      }
-    });
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          console.log('🔄 偵測到密碼重設請求，正在跳轉...');
+          router.navigate('/reset-password');
+        }
+      });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+      return () => {
+        subscription.unsubscribe();
+      };
+    } catch (error) {
+      console.error('Initial auth check failed:', error);
+    }
   }, []);
 
   return (
