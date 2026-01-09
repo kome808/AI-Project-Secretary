@@ -13,6 +13,16 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
     ArrowLeft,
     Calendar,
     User,
@@ -170,35 +180,43 @@ export function TaskDetailPage() {
     };
 
     const [isDeleting, setIsDeleting] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-    const handleDelete = async (e?: React.MouseEvent) => {
+    const handleDelete = (e?: React.MouseEvent) => {
         if (e) {
             e.preventDefault();
             e.stopPropagation();
         }
         if (!item || isDeleting) return;
+        setShowDeleteDialog(true);
+    };
 
-        if (!confirm('確定要刪除此任務嗎？')) return;
+    const confirmDelete = async () => {
+        if (!item) return;
 
         setIsDeleting(true);
+        setShowDeleteDialog(false);
         const storage = getStorageClient();
         try {
             const { error } = await storage.deleteItem(item.id);
             if (error) {
-                // Check for foreign key constraint error (Postgres code 23503)
-                const pgError = error as any;
-                if (pgError.message?.includes('foreign key constraint') || pgError.code === '23503') {
-                    throw new Error('無法刪除：此任務包含子項目或有關聯資料，請先刪除相關項目。');
+                // Check for specific error message from adapter
+                if (error.message?.includes('無法刪除')) {
+                    toast.error(error.message, { duration: 5000 });
+                } else {
+                    throw error;
                 }
-                throw error;
+                setIsDeleting(false);
+                return;
             }
 
-            toast.success('任務已刪除');
-            navigate('/app/tasks');
+            toast.success('任務已刪除', { duration: 2000 });
+            // Delay navigation slightly to allow toast to show
+            setTimeout(() => navigate('/app/tasks'), 300);
         } catch (error: any) {
             console.error('Error deleting task:', error);
             const msg = error.message || '刪除失敗';
-            toast.error(msg);
+            toast.error(msg, { duration: 5000 });
             setIsDeleting(false);
         }
     };
@@ -447,6 +465,28 @@ export function TaskDetailPage() {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>確定要刪除此任務嗎？</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            此操作無法復原。刪除後，此任務將永久移除。
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDelete}
+                            disabled={isDeleting}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isDeleting ? '刪除中...' : '確認刪除'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
