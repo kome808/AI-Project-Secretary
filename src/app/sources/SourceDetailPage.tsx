@@ -110,8 +110,11 @@ export function SourceDetailPage() {
     const referencedItems = useMemo(() => {
         if (!artifact) return [];
         return items.filter(item =>
-            item.source_artifact_id === artifact.id ||
-            item.meta?.citation?.artifact_id === artifact.id
+            // Only include items that reference this artifact
+            (item.source_artifact_id === artifact.id ||
+                item.meta?.citation?.artifact_id === artifact.id) &&
+            // Exclude suggestion items (AI generated that haven't been confirmed)
+            item.status !== 'suggestion'
         );
     }, [artifact, items]);
 
