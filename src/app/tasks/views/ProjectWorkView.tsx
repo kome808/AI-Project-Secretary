@@ -597,9 +597,10 @@ export function ProjectWorkView({
     }
   };
 
-  const handleDeleteItem = (itemId: string) => {
+  const handleDeleteItem = async (itemId: string): Promise<boolean> => {
     // Open dialog
     setItemToDelete(itemId);
+    return true; // Dialog opened
   };
 
   const confirmDelete = async () => {
@@ -608,24 +609,35 @@ export function ProjectWorkView({
     const storage = getStorageClient();
     try {
       const { error } = await storage.deleteItem(itemToDelete);
-      if (error) throw error;
-
-      toast.success('已刪除任務');
-      onRefresh();
-    } catch (error) {
+      if (error) {
+        // Check for specific error message from adapter
+        if (error.message?.includes('無法刪除')) {
+          toast.error(error.message);
+        } else {
+          throw error;
+        }
+      } else {
+        toast.success('已刪除任務');
+        onRefresh();
+      }
+    } catch (error: any) {
       console.error('Error deleting item:', error);
-      toast.error('刪除失敗：可能包含子任務或其他關聯');
+      toast.error(error.message || '刪除失敗：可能包含子任務或其他關聯');
     } finally {
       setItemToDelete(null);
     }
   };
 
   const adaptWorkPackageToItem = (wp: WorkPackage): Item => {
+    // Map WorkPackageStatus 'on_hold' to ItemStatus 'blocked' or similar
+    let status: any = wp.status;
+    if (status === 'on_hold') status = 'blocked';
+
     return {
       id: wp.id,
       project_id: wp.project_id,
       type: 'general',
-      status: wp.status,
+      status: status,
       title: wp.title,
       description: wp.description || '',
       assignee_id: wp.owner_id,
@@ -895,6 +907,24 @@ export function ProjectWorkView({
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要刪除此任務嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作無法復原。如果此任務包含子任務，它們也會被解除關聯或刪除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              確認刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialogs */}
       <WorkPackageEditDialog
