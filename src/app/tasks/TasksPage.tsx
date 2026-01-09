@@ -123,7 +123,7 @@ export function TasksPage() {
             const Icon = tab.icon;
             const isActive = currentView === tab.id;
 
-            // Count items logic
+            // Count items logic - only for 'actions' tab
             let count = 0;
             if (tab.id === 'actions') {
               count = items.filter(i =>
@@ -131,14 +131,8 @@ export function TasksPage() {
                 i.assignee_id === currentUser?.id &&
                 i.status !== 'completed'
               ).length;
-            } else if (tab.id === 'todos') {
-              count = items.filter(i => i.type === 'todo' && i.status !== 'completed').length;
-            } else if (tab.id === 'work') {
-              // Only count visible root items
-              count = items.filter(i => i.meta?.isWorkPackage && !i.parent_id).length;
-            } else if (tab.id === 'features') {
-              count = items.filter(i => i.meta?.isFeatureModule === true && !i.parent_id).length;
             }
+            // No count displayed for other tabs
 
             return (
               <button
