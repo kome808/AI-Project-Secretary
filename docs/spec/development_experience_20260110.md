@@ -296,6 +296,219 @@ interface ImportMeta {
 
 ---
 
+## 八、AI 對話整合與意圖判斷
+
+### 問題現象
+
+AI 秘書需要判斷使用者意圖（建立任務、查詢資訊等），但初期經常誤判或回覆格式不一致。
+
+### 解決方案
+
+**1. 結構化的意圖分類提示詞**：
+
+```typescript
+const INTENT_PROMPT = `
+你是專案管理助理，分析使用者輸入並判斷意圖。
+
+## 意圖類型
+- CREATE_TASK: 建立新任務
+- QUERY_INFO: 查詢專案資訊
+- UPDATE_STATUS: 更新任務狀態
+- GENERAL_CHAT: 一般閒聊
+
+## 輸出格式（必須是 JSON）
+{"intent": "類型", "confidence": 0.0-1.0, "extracted_info": {...}}
+`;
+```
+
+**2. Few-Shot Examples 強化判斷**：
+
+```typescript
+const FEW_SHOT = `
+使用者: 明天要交週報
+回應: {"intent": "CREATE_TASK", "confidence": 0.9, "extracted_info": {"title": "交週報"}}
+
+使用者: 專案進度如何？
+回應: {"intent": "QUERY_INFO", "confidence": 0.95}
+`;
+```
+
+**3. 回覆格式驗證**：
+
+```typescript
+const jsonMatch = content.match(/\{[\s\S]*\}/);
+if (!jsonMatch) {
+  return { intent: 'GENERAL_CHAT', confidence: 0.5, raw_response: content };
+}
+```
+
+### 學到的教訓
+
+> 📌 **提示詞設計是迭代過程**。要明確定義輸出格式、提供具體範例、並在程式端做格式驗證。
+
+---
+
+## 九、提示詞管理與動態調整
+
+### 問題現象
+
+頻繁調整提示詞需要改程式碼並重新部署，效率極低。
+
+### 解決方案
+
+**1. 提示詞存儲在資料庫**：
+
+```typescript
+interface SystemPrompts {
+  wbs_parser: string;           // WBS 解析提示詞
+  intent_classification: string; // 意圖分類提示詞
+  few_shot_examples: string;     // 範例對話
+}
+```
+
+**2. 預設值 Fallback 機制**：
+
+```typescript
+async getSystemPrompts(projectId: string) {
+  const { data } = await supabase.from('system_prompts').select('*').single();
+  
+  return {
+    wbs_parser: data?.wbs_parser?.trim() || WBS_PARSER_PROMPT,  // 資料庫為空時用預設值
+    intent_classification: data?.intent_classification?.trim() || INTENT_PROMPT,
+  };
+}
+```
+
+**3. Console Log 追蹤來源**：
+
+```typescript
+console.log('📋 使用的 Prompt:', {
+  source: data?.wbs_parser ? '資料庫' : '預設值',
+  length: finalPrompt.length
+});
+```
+
+### 學到的教訓
+
+> 📌 **提示詞應該是可配置的**，儲存在資料庫並提供管理介面，同時保留程式碼中的預設值作為 Fallback。
+
+---
+
+## 十、上傳內容分析（Vision API）
+
+### 問題現象
+
+使用者上傳 WBS 圖片後，AI 需要識別並提取任務結構。
+
+### 解決方案
+
+**1. Vision API 整合**：
+
+```typescript
+const response = await fetch(edgeFunctionUrl, {
+  method: 'POST',
+  body: JSON.stringify({
+    model: 'gpt-4o-mini',
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: WBS_PARSER_PROMPT },
+        { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` }}
+      ]
+    }]
+  })
+});
+```
+
+**2. 結構化輸出要求**：
+
+```typescript
+const WBS_PARSER_PROMPT = `
+分析文件並提取任務結構。輸出格式：
+{
+  "tasks": [
+    {"wbs_code": "1.1", "title": "任務標題", "level": 2, "parent_code": "1"}
+  ]
+}
+`;
+```
+
+### 學到的教訓
+
+> 📌 **不同格式需要不同處理策略**。Vision API 適合圖片，但要注意 Token 用量。輸出格式必須嚴格定義。
+
+---
+
+## 十一、Embedding 與語意搜尋（RAG）
+
+### 問題現象
+
+使用者想用自然語言搜尋：「之前討論的 API 問題」，但關鍵字搜尋無法處理語意相似性。
+
+### 解決方案
+
+**1. 文字向量化**：
+
+```typescript
+async generateEmbedding(text: string): Promise<number[]> {
+  const response = await fetch(url, {
+    body: JSON.stringify({ model: 'text-embedding-3-small', input: text })
+  });
+  return response.data[0].embedding;  // 1536 維向量
+}
+```
+
+**2. Supabase + pgvector 語意搜尋**：
+
+```sql
+-- 資料庫設定
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE items ADD COLUMN embedding vector(1536);
+
+-- 搜尋函數
+CREATE FUNCTION match_items(query_embedding vector(1536), match_count int)
+RETURNS TABLE (id uuid, title text, similarity float) AS $$
+  SELECT id, title, 1 - (embedding <=> query_embedding) AS similarity
+  FROM items
+  ORDER BY similarity DESC
+  LIMIT match_count;
+$$ LANGUAGE sql;
+```
+
+### 學到的教訓
+
+> 📌 **RAG 的核心是 Embedding + 向量搜尋**。記得在建立/更新資料時同步更新 Embedding。
+
+---
+
+## 十二、AI API 參數變更
+
+### 問題現象
+
+OpenAI API 突然報錯，原本正常的程式碼失效。
+
+### 根本原因
+
+OpenAI 更新參數：`max_tokens` → `max_completion_tokens`（GPT-4+）。
+
+### 解決方案
+
+```typescript
+const requestBody: any = { model, messages, temperature };
+
+if (provider === 'openai' && model.includes('gpt-4')) {
+  requestBody.max_completion_tokens = maxTokens;  // 新參數
+} else {
+  requestBody.max_tokens = maxTokens;  // 舊參數 / Anthropic
+}
+```
+
+### 學到的教訓
+
+> 📌 **外部 API 會變**。要關注供應商的更新日誌，並封裝 API 呼叫層方便統一調整。
+
+---
+
 ## 總結：防禦性程式設計原則
 
 | 原則 | 說明 |
