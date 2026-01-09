@@ -142,6 +142,47 @@ export function SourcesPage() {
     }
   };
 
+  const handleGhostCleanup = async () => {
+    if (!confirm('確定要執行幽靈任務清理嗎？\n這將刪除特定的 3 個已知殘留任務。')) return;
+
+    setIsCleaning(true);
+    const storage = getStorageClient();
+    const ghostTitles = [
+      'CR: 權利盤點作業的存取權限與外部法律團隊介入',
+      'CR: 新增審議會議管理功能於後台典藏系統',
+      '決議內容：前台網站視覺設計決議'
+    ];
+    let deletedCount = 0;
+
+    try {
+      // Find tasks in the currently loaded items
+      const targetItems = items.filter(i => ghostTitles.some(t => i.title.includes(t)));
+
+      if (targetItems.length === 0) {
+        toast.info('在當前列表中未發現目標任務');
+        setIsCleaning(false);
+        return;
+      }
+
+      for (const item of targetItems) {
+        const { error } = await storage.deleteItem(item.id);
+        if (!error) deletedCount++;
+      }
+
+      if (deletedCount > 0) {
+        toast.success(`已清理 ${deletedCount} 個幽靈任務`);
+        refresh();
+      } else {
+        toast.warning('清理執行完成但未刪除任何任務');
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('清理失敗');
+    } finally {
+      setIsCleaning(false);
+    }
+  };
+
   const executeCleanup = async () => {
     setIsCleanupConfirmOpen(false);
     setIsCleaning(true);
@@ -256,14 +297,25 @@ export function SourcesPage() {
                 )}
 
                 {getCurrentUser() && isSystemAdmin(getCurrentUser()!) && (
-                  <DropdownMenuItem
-                    onClick={handlePruneStorage}
-                    disabled={isPruning || isLoading}
-                    className="cursor-pointer"
-                  >
-                    <Database className="h-4 w-4 mr-2" />
-                    <span>深度清理儲存空間</span>
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem
+                      onClick={handlePruneStorage}
+                      disabled={isPruning || isLoading}
+                      className="cursor-pointer"
+                    >
+                      <Database className="h-4 w-4 mr-2" />
+                      <span>深度清理儲存空間</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      onClick={handleGhostCleanup}
+                      disabled={isCleaning || isLoading}
+                      className="text-amber-600 focus:text-amber-700 focus:bg-amber-50 cursor-pointer border-t"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      <span>指定幽靈任務清理</span>
+                    </DropdownMenuItem>
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
