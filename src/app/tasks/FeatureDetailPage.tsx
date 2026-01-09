@@ -13,6 +13,12 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
     ArrowLeft,
     Calendar,
     User,
@@ -28,7 +34,10 @@ import {
     Link as LinkIcon,
     Image as ImageIcon,
     Upload,
-    Plus
+    Plus,
+    Briefcase,
+    ListChecks,
+    ChevronDown
 } from 'lucide-react';
 import { useProject } from '../context/ProjectContext';
 import { getStorageClient } from '../../lib/storage';
@@ -349,6 +358,84 @@ export function FeatureDetailPage() {
                                 <Edit2 className="w-4 h-4 mr-1" />
                                 編輯
                             </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        轉換類型
+                                        <ChevronDown className="w-4 h-4 ml-1" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    {/* 檢查是否有專屬欄位內容 */}
+                                    {(() => {
+                                        const hasFeatureContent = !!(
+                                            requirementsSpec ||
+                                            functionalSpec ||
+                                            (designPrototypes && designPrototypes.length > 0)
+                                        );
+                                        return (
+                                            <>
+                                                <DropdownMenuItem
+                                                    onClick={async () => {
+                                                        if (hasFeatureContent) {
+                                                            toast.error('此功能模組已有需求規格、功能規格或設計雛形，無法轉換。請先清除這些欄位內容。');
+                                                            return;
+                                                        }
+                                                        if (!item) return;
+                                                        if (!confirm('確定要將此功能模組轉換為專案工作嗎？\n轉換後將移至「專案工作」頁面。')) return;
+                                                        const storage = getStorageClient();
+                                                        try {
+                                                            await storage.updateItem(item.id, {
+                                                                type: 'general',
+                                                                meta: { ...item.meta, isWorkPackage: true, isFeatureModule: false }
+                                                            });
+                                                            toast.success('已轉換為專案工作');
+                                                            navigate('/app/tasks?view=wbs');
+                                                        } catch (error) {
+                                                            console.error('Error converting:', error);
+                                                            toast.error('轉換失敗');
+                                                        }
+                                                    }}
+                                                    disabled={hasFeatureContent}
+                                                    className={hasFeatureContent ? 'opacity-50' : ''}
+                                                >
+                                                    <Briefcase className="w-4 h-4 mr-2" />
+                                                    轉換為專案工作
+                                                    {hasFeatureContent && <span className="ml-2 text-xs text-muted-foreground">(有欄位內容)</span>}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={async () => {
+                                                        if (hasFeatureContent) {
+                                                            toast.error('此功能模組已有需求規格、功能規格或設計雛形，無法轉換。請先清除這些欄位內容。');
+                                                            return;
+                                                        }
+                                                        if (!item) return;
+                                                        if (!confirm('確定要將此功能模組轉換為待辦事項嗎？\n轉換後將移至「待辦事項」頁面。')) return;
+                                                        const storage = getStorageClient();
+                                                        try {
+                                                            await storage.updateItem(item.id, {
+                                                                type: 'todo',
+                                                                meta: { ...item.meta, isWorkPackage: false, isFeatureModule: false }
+                                                            });
+                                                            toast.success('已轉換為待辦事項');
+                                                            navigate('/app/tasks?view=todo');
+                                                        } catch (error) {
+                                                            console.error('Error converting:', error);
+                                                            toast.error('轉換失敗');
+                                                        }
+                                                    }}
+                                                    disabled={hasFeatureContent}
+                                                    className={hasFeatureContent ? 'opacity-50' : ''}
+                                                >
+                                                    <ListChecks className="w-4 h-4 mr-2" />
+                                                    轉換為待辦事項
+                                                    {hasFeatureContent && <span className="ml-2 text-xs text-muted-foreground">(有欄位內容)</span>}
+                                                </DropdownMenuItem>
+                                            </>
+                                        );
+                                    })()}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button variant="destructive" size="sm" onClick={handleDelete}>
                                 <Trash2 className="w-4 h-4 mr-1" />
                                 刪除
