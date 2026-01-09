@@ -171,7 +171,11 @@ export function TaskDetailPage() {
 
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const handleDelete = async () => {
+    const handleDelete = async (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!item || isDeleting) return;
 
         if (!confirm('確定要刪除此任務嗎？')) return;

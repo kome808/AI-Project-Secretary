@@ -1878,6 +1878,33 @@ export class SupabaseAdapter implements StorageAdapter {
       }
 
       const schemaName = getSchemaName();
+
+      // 1. Manually unlink children (Set parent_id = NULL)
+      // This ensures we can delete the parent even if the DB constraint is RESTRICT
+      const { error: unlinkError } = await this.supabase
+        .schema(schemaName)
+        .from('items')
+        .update({ parent_id: null })
+        .eq('parent_id', id);
+
+      if (unlinkError) {
+        console.warn('⚠️ Failed to unlink children (might have no children), proceeding:', unlinkError);
+      }
+
+      // 2. Try to cleanup item_artifacts if table exists (for M:N relations)
+      // Note: SupabaseAdapter currently uses 1:1 via source_artifact_id, but we clean M:N just in case schema differs
+      const { error: artifactError } = await this.supabase
+        .schema(schemaName)
+        .from('item_artifacts')
+        .delete()
+        .eq('item_id', id);
+
+      if (artifactError) {
+        // Ignore error as table might not exist or no permission
+        // console.warn('⚠️ Failed to clean item_artifacts:', artifactError);
+      }
+
+      // 3. Delete the item
       const { error } = await this.supabase
         .schema(schemaName)
         .from('items')
