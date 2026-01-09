@@ -7,15 +7,14 @@ let currentUrl: string | null = null;
 let currentKey: string | null = null;
 let currentStorageKey: string | null = null; // 追蹤當前的 storage key
 
-// Supabase 連線資訊從 localStorage 讀取
-// 遵循 Guidelines.md 禁止 1：不使用 import.meta.env
+// Supabase 連線資訊優先從環境變數讀取（部署用），其次從 localStorage 讀取（本地開發/自定義）
 export function getSupabaseClient(): SupabaseClient {
-  // 優先從 localStorage 讀取（開發測試用），其次從環境變數讀取（部署用）
-  const supabaseUrl = localStorage.getItem('supabase_url') || import.meta.env.VITE_SUPABASE_URL || '';
-  const supabaseAnonKey = localStorage.getItem('supabase_anon_key') || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  // 優先順序：環境變數 > localStorage（Vercel 部署時環境變數已設定，使用者無需手動配置）
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('supabase_url') || '';
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || localStorage.getItem('supabase_anon_key') || '';
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase 連線資訊未設定。請先在系統設定中配置 Supabase URL 和 Anon Key。');
+    throw new Error('Supabase 連線資訊未設定。請聯繫系統管理員或在環境變數中配置 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY。');
   }
 
   const projectId = supabaseUrl.split('//')[1]?.split('.')[0] || 'default';
@@ -58,9 +57,10 @@ export function getSupabaseClient(): SupabaseClient {
 }
 
 // Helper function to check if Supabase is configured
+// 優先檢查環境變數（Vercel 部署），其次檢查 localStorage（本地開發）
 export function hasSupabaseConfig(): boolean {
-  const supabaseUrl = localStorage.getItem('supabase_url');
-  const supabaseAnonKey = localStorage.getItem('supabase_anon_key');
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('supabase_url');
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || localStorage.getItem('supabase_anon_key');
   return !!(supabaseUrl && supabaseAnonKey);
 }
 
