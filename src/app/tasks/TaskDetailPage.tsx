@@ -169,21 +169,33 @@ export function TaskDetailPage() {
         }
     };
 
+    const [isDeleting, setIsDeleting] = useState(false);
+
     const handleDelete = async () => {
-        if (!item) return;
+        if (!item || isDeleting) return;
 
         if (!confirm('確定要刪除此任務嗎？')) return;
 
+        setIsDeleting(true);
         const storage = getStorageClient();
         try {
             const { error } = await storage.deleteItem(item.id);
-            if (error) throw error;
+            if (error) {
+                // Check for foreign key constraint error (Postgres code 23503)
+                const pgError = error as any;
+                if (pgError.message?.includes('foreign key constraint') || pgError.code === '23503') {
+                    throw new Error('無法刪除：此任務包含子項目或有關聯資料，請先刪除相關項目。');
+                }
+                throw error;
+            }
 
             toast.success('任務已刪除');
             navigate('/app/tasks');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error deleting task:', error);
-            toast.error('刪除失敗');
+            const msg = error.message || '刪除失敗';
+            toast.error(msg);
+            setIsDeleting(false);
         }
     };
 
@@ -287,9 +299,9 @@ export function TaskDetailPage() {
                                     </>
                                 )}
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={handleDelete}>
+                            <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>
                                 <Trash2 className="w-4 h-4 mr-1" />
-                                刪除
+                                {isDeleting ? '刪除中...' : '刪除'}
                             </Button>
                         </>
                     )}
