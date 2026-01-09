@@ -394,42 +394,86 @@ export function DraggableWBSCard({
             </DropdownMenuItem>
 
             {/* Conversion options based on current item type */}
-            {item.type === 'todo' ? (
-              // Todo → 專案工作
-              <DropdownMenuItem onClick={() => {
-                if (!confirm('確定要將此待辦事項轉換為專案工作嗎？\n轉換後將移至「專案工作」頁面。')) return;
-                onItemUpdate(item.id, {
-                  type: 'general',
-                  meta: { ...item.meta, isWorkPackage: true, isFeatureModule: false }
-                }).then(() => toast.success('已轉換為專案工作'));
-              }}>
-                <Briefcase className="h-4 w-4 mr-2" />
-                轉換為專案工作
-              </DropdownMenuItem>
-            ) : (
-              // 專案工作 → 功能模組 或 待辦事項
-              <>
-                <DropdownMenuItem onClick={() => {
-                  if (!confirm('確定要將此任務轉換為功能模組嗎？\n轉換後將移至「功能模組」頁面。')) return;
-                  onItemUpdate(item.id, {
-                    meta: { ...item.meta, isFeatureModule: true, isWorkPackage: false }
-                  }).then(() => toast.success('已轉換為功能模組'));
-                }}>
-                  <Layers className="h-4 w-4 mr-2" />
-                  轉換為功能模組
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                  if (!confirm('確定要將此任務轉換為待辦事項嗎？\n轉換後將移至「待辦事項」頁面。')) return;
-                  onItemUpdate(item.id, {
-                    type: 'todo',
-                    meta: { ...item.meta, isWorkPackage: false, isFeatureModule: false }
-                  }).then(() => toast.success('已轉換為待辦事項'));
-                }}>
-                  <ListChecks className="h-4 w-4 mr-2" />
-                  轉換為待辦事項
-                </DropdownMenuItem>
-              </>
-            )}
+            {(() => {
+              // 判斷當前項目類型
+              const isWorkPackage = item.meta?.isWorkPackage === true;
+              const isFeatureModule = item.meta?.isFeatureModule === true;
+              const isTodo = item.type === 'todo';
+
+              // 檢查功能模組專屬欄位是否有內容
+              const hasFeatureContent = !!(
+                item.meta?.requirementsSpec ||
+                item.meta?.functionalSpec ||
+                (item.meta?.designPrototypes && item.meta.designPrototypes.length > 0)
+              );
+
+              // 如果是功能模組且有專屬欄位內容，禁用轉換
+              const isConversionDisabled = isFeatureModule && hasFeatureContent;
+
+              return (
+                <>
+                  {/* 轉換為專案工作 - 功能模組和待辦事項可見 */}
+                  {(isFeatureModule || isTodo) && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (isConversionDisabled) {
+                          toast.error('此功能模組已有需求規格、功能規格或設計雛形，無法轉換。請先清除這些欄位內容。');
+                          return;
+                        }
+                        if (!confirm('確定要將此任務轉換為專案工作嗎？\n轉換後將移至「專案工作」頁面。')) return;
+                        onItemUpdate(item.id, {
+                          type: 'general',
+                          meta: { ...item.meta, isWorkPackage: true, isFeatureModule: false }
+                        }).then(() => toast.success('已轉換為專案工作'));
+                      }}
+                      disabled={isConversionDisabled}
+                      className={isConversionDisabled ? 'opacity-50 cursor-not-allowed' : ''}
+                    >
+                      <Briefcase className="h-4 w-4 mr-2" />
+                      轉換為專案工作
+                      {isConversionDisabled && <span className="ml-2 text-xs text-muted-foreground">(有欄位內容)</span>}
+                    </DropdownMenuItem>
+                  )}
+
+                  {/* 轉換為功能模組 - 專案工作和待辦事項可見 */}
+                  {(isWorkPackage || isTodo || (!isWorkPackage && !isFeatureModule && !isTodo)) && (
+                    <DropdownMenuItem onClick={() => {
+                      if (!confirm('確定要將此任務轉換為功能模組嗎？\n轉換後將移至「功能模組」頁面。')) return;
+                      onItemUpdate(item.id, {
+                        type: 'general',
+                        meta: { ...item.meta, isFeatureModule: true, isWorkPackage: false }
+                      }).then(() => toast.success('已轉換為功能模組'));
+                    }}>
+                      <Layers className="h-4 w-4 mr-2" />
+                      轉換為功能模組
+                    </DropdownMenuItem>
+                  )}
+
+                  {/* 轉換為待辦事項 - 專案工作和功能模組可見 */}
+                  {(isWorkPackage || isFeatureModule || (!isWorkPackage && !isFeatureModule && !isTodo)) && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (isConversionDisabled) {
+                          toast.error('此功能模組已有需求規格、功能規格或設計雛形，無法轉換。請先清除這些欄位內容。');
+                          return;
+                        }
+                        if (!confirm('確定要將此任務轉換為待辦事項嗎？\n轉換後將移至「待辦事項」頁面。')) return;
+                        onItemUpdate(item.id, {
+                          type: 'todo',
+                          meta: { ...item.meta, isWorkPackage: false, isFeatureModule: false }
+                        }).then(() => toast.success('已轉換為待辦事項'));
+                      }}
+                      disabled={isConversionDisabled}
+                      className={isConversionDisabled ? 'opacity-50 cursor-not-allowed' : ''}
+                    >
+                      <ListChecks className="h-4 w-4 mr-2" />
+                      轉換為待辦事項
+                      {isConversionDisabled && <span className="ml-2 text-xs text-muted-foreground">(有欄位內容)</span>}
+                    </DropdownMenuItem>
+                  )}
+                </>
+              );
+            })()}
 
             <DropdownMenuItem
               onClick={(e) => {
