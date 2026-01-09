@@ -118,27 +118,34 @@ export const useSources = () => {
     no_usage: artifacts.filter(a => getCitationCount(a.id) === 0).length,
   }), [artifacts, items]);
 
-  // Detect duplicate artifacts by storage_path, file_name, or content hash
+  // Detect duplicate artifacts by file_name (for uploads) or content similarity
   const duplicateArtifacts = useMemo(() => {
     const seen = new Map<string, Artifact>();
     const duplicates: Artifact[] = [];
 
-    artifacts.forEach(a => {
-      // Build a unique key based on storage_path or original_content (first 500 chars) + file_name
-      const fileName = a.meta?.file_name || '';
-      const contentKey = a.storage_path || (a.original_content?.slice(0, 500) + fileName);
+    // Sort by created_at ascending so we keep the oldest
+    const sortedArtifacts = [...artifacts].sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
 
-      if (contentKey && seen.has(contentKey)) {
-        // This is a duplicate - keep the older one, mark this as duplicate
-        const existing = seen.get(contentKey)!;
-        if (new Date(a.created_at) > new Date(existing.created_at)) {
-          duplicates.push(a); // Newer one is duplicate
-        } else {
-          duplicates.push(existing);
-          seen.set(contentKey, a); // Replace with older one
-        }
-      } else if (contentKey) {
-        seen.set(contentKey, a);
+    sortedArtifacts.forEach(a => {
+      // For file uploads, use file_name as deduplication key
+      // For text content, use content hash (first 200 chars)
+      let dedupeKey = '';
+
+      if (a.meta?.file_name) {
+        // Primary: file_name for uploaded files
+        dedupeKey = `file:${a.meta.file_name}`;
+      } else if (a.original_content) {
+        // Fallback: content hash for text entries
+        dedupeKey = `content:${a.original_content.slice(0, 200).trim()}`;
+      }
+
+      if (dedupeKey && seen.has(dedupeKey)) {
+        // This is a duplicate (newer version) - mark for removal
+        duplicates.push(a);
+      } else if (dedupeKey) {
+        seen.set(dedupeKey, a);
       }
     });
 
