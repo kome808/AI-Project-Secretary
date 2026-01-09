@@ -67,8 +67,13 @@ export function DraggableWBSCard({
   const [dropPosition, setDropPosition] = useState<'before' | 'after' | 'inside' | null>(null);
 
   // Navigate to task detail page
+  // Navigate to task detail page
   const handleViewDetails = () => {
-    navigate(`/tasks/${item.id}`);
+    if (item.meta?.isWorkPackage) {
+      navigate(`/app/work/${item.id}`);
+    } else {
+      navigate(`/app/tasks/${item.id}`);
+    }
   };
 
   // Drag functionality

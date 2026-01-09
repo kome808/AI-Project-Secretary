@@ -47,7 +47,7 @@ export function CompactItemCard({
   const [isUpdating, setIsUpdating] = useState(false);
 
   const handleViewDetails = () => {
-    navigate(`/tasks/${item.id}`);
+    navigate(`/app/tasks/${item.id}`);
   };
 
   const formatDate = (dateString?: string) => {

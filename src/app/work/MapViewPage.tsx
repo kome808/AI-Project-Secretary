@@ -228,7 +228,7 @@ export function MapViewPage() {
                   key={wp.id}
                   className={`cursor-pointer hover:shadow-[var(--elevation-sm)] transition-all ${riskInfo ? 'border-destructive/30' : ''
                     }`}
-                  onClick={() => navigate(`/work/${wp.id}`)}
+                  onClick={() => navigate(`/app/work/${wp.id}`)}
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
@@ -258,8 +258,8 @@ export function MapViewPage() {
                       <div className="flex items-center justify-between">
                         <label className="opacity-70">完成進度</label>
                         <span className={`${completionRate === 100 ? 'text-emerald-600' :
-                            completionRate >= 50 ? 'text-primary' :
-                              'text-amber-600'
+                          completionRate >= 50 ? 'text-primary' :
+                            'text-amber-600'
                           }`}>
                           {completionRate}%
                         </span>

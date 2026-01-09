@@ -231,7 +231,7 @@ export function WorkListPage() {
                   <div
                     key={wp.id}
                     className="flex items-center justify-between p-4 border rounded-[var(--radius-lg)] hover:bg-muted/30 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/work/${wp.id}`)}
+                    onClick={() => navigate(`/app/work/${wp.id}`)}
                   >
                     <div className="flex items-start gap-4 flex-1 min-w-0">
                       {/* Status Indicator */}

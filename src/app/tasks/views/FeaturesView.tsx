@@ -260,7 +260,7 @@ export function FeaturesView({
     };
 
     const handleViewDetails = (featureId: string) => {
-        navigate(`/features/${featureId}`);
+        navigate(`/app/features/${featureId}`);
     };
 
 

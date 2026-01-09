@@ -333,7 +333,7 @@ export function WorkDetailPage() {
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-[var(--radius)] hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate('/actions')}
+                    onClick={() => navigate('/app/tasks?view=actions')}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <div className={`w-2 h-2 rounded-full shrink-0 ${item.status === 'done' ? 'bg-emerald-500' :
@@ -376,7 +376,7 @@ export function WorkDetailPage() {
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-[var(--radius)] hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate('/pending')}
+                    onClick={() => navigate('/app/tasks?view=todos')}
                   >
                     <p className="flex-1 truncate">{item.title}</p>
                     <Badge variant="outline" className="ml-2 text-accent border-accent/30 shrink-0">
@@ -413,7 +413,7 @@ export function WorkDetailPage() {
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-[var(--radius)] hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate('/cr')}
+                    onClick={() => navigate('/app/tasks?view=work')}
                   >
                     <p className="flex-1 truncate">{item.title}</p>
                     <Badge
@@ -447,7 +447,7 @@ export function WorkDetailPage() {
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-[var(--radius)] hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate('/decisions')}
+                    onClick={() => navigate('/app/tasks?view=actions')}
                   >
                     <p className="flex-1 truncate">{item.title}</p>
                   </div>

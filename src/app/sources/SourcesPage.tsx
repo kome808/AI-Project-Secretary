@@ -171,7 +171,9 @@ export function SourcesPage() {
   };
 
   const handleSelectArtifact = (artifact: Artifact) => {
-    navigate(`/sources/${artifact.id}`);
+    const handleSelectArtifact = (artifact: Artifact) => {
+      navigate(`/app/sources/${artifact.id}`);
+    };
   };
 
   if (!currentProject) {
