@@ -337,8 +337,8 @@ export function WorkDetailPage() {
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <div className={`w-2 h-2 rounded-full shrink-0 ${item.status === 'done' ? 'bg-emerald-500' :
-                          item.status === 'blocked' ? 'bg-destructive' :
-                            'bg-primary'
+                        item.status === 'blocked' ? 'bg-destructive' :
+                          'bg-primary'
                         }`} />
                       <p className="truncate">{item.title}</p>
                     </div>
@@ -348,7 +348,7 @@ export function WorkDetailPage() {
                   </div>
                 ))}
                 {actions.length > 5 && (
-                  <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/actions')}>
+                  <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/app/tasks?view=actions')}>
                     查看全部 {actions.length} 項任務
                   </Button>
                 )}
@@ -385,7 +385,7 @@ export function WorkDetailPage() {
                   </div>
                 ))}
                 {pending.length > 5 && (
-                  <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/pending')}>
+                  <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/app/tasks?view=todos')}>
                     查看全部 {pending.length} 項
                   </Button>
                 )}
@@ -419,8 +419,8 @@ export function WorkDetailPage() {
                     <Badge
                       variant="outline"
                       className={`ml-2 shrink-0 ${item.meta?.risk_level === 'high'
-                          ? 'bg-destructive text-destructive-foreground border-destructive'
-                          : 'bg-amber-100 text-amber-800 border-amber-200'
+                        ? 'bg-destructive text-destructive-foreground border-destructive'
+                        : 'bg-amber-100 text-amber-800 border-amber-200'
                         }`}
                     >
                       {item.meta?.risk_level === 'high' ? '高風險' : '中風險'}

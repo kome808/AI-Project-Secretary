@@ -39,6 +39,14 @@ export function TasksPage() {
     refresh
   } = useTasks();
 
+  // Initialize view from URL param
+  useEffect(() => {
+    const viewParam = searchParams.get('view') as ViewType;
+    if (viewParam && ['actions', 'work', 'features', 'todos'].includes(viewParam)) {
+      setCurrentView(viewParam);
+    }
+  }, [searchParams, setCurrentView]);
+
   // Scroll to highlighted item when data is loaded
   useEffect(() => {
     if (highlightedItemId && !isLoading && items.length > 0) {
@@ -135,7 +143,14 @@ export function TasksPage() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setCurrentView(tab.id)}
+                onClick={() => {
+                  setCurrentView(tab.id);
+                  setSearchParams(prev => {
+                    const newParams = new URLSearchParams(prev);
+                    newParams.set('view', tab.id);
+                    return newParams;
+                  });
+                }}
                 className={`
                   flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap
                   ${isActive

@@ -45,7 +45,7 @@ export function RelatedItemsList({ items, onCloseDetail }: RelatedItemsListProps
         return 'bg-destructive/10 text-destructive';
       case 'awaiting_response':
         return 'bg-[#FFC107]/10 text-[#F57C00]';
-      
+
       // 舊格式狀態（向後相容）
       case 'open':
         return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
@@ -53,17 +53,17 @@ export function RelatedItemsList({ items, onCloseDetail }: RelatedItemsListProps
         return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
       case 'waiting':
         return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
-      
+
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
     }
   };
 
   const handleItemClick = (item: Item) => {
-    const basePath = item.type === 'action' ? '/actions' : 
-                     item.type === 'pending' ? '/pending' : 
-                     '/decisions';
-    
+    const basePath = item.type === 'action' ? '/app/tasks?view=actions' :
+      item.type === 'pending' ? '/app/tasks?view=todos' :
+        '/app/tasks?view=actions';
+
     if (onCloseDetail) onCloseDetail();
     navigate(basePath, { state: { openItemId: item.id } });
   };
@@ -93,7 +93,7 @@ export function RelatedItemsList({ items, onCloseDetail }: RelatedItemsListProps
                 const location = citation?.location_info;
 
                 return (
-                  <div 
+                  <div
                     key={item.id}
                     onClick={() => handleItemClick(item)}
                     className="flex flex-col p-3 rounded-lg border bg-card hover:bg-accent/5 transition-colors cursor-pointer group"
@@ -102,7 +102,7 @@ export function RelatedItemsList({ items, onCloseDetail }: RelatedItemsListProps
                       <div className="shrink-0">
                         {getTypeIcon(item.type)}
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-medium truncate group-hover:text-accent transition-colors">
                           {item.title}
