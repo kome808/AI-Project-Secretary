@@ -79,19 +79,19 @@ export function MapViewPage() {
 
   const getCompletionRate = (wp: WorkPackage) => {
     if (wp.completion_rate !== undefined) return wp.completion_rate;
-    
-    const relatedActions = items.filter(item => 
+
+    const relatedActions = items.filter(item =>
       item.type === 'action' && item.meta?.work_package_id === wp.id
     );
 
     if (relatedActions.length === 0) return 0;
-    
+
     const doneCount = relatedActions.filter(i => i.status === 'done').length;
     return Math.round((doneCount / relatedActions.length) * 100);
   };
 
   const getRiskInfo = (wp: WorkPackage) => {
-    const relatedItems = items.filter(item => 
+    const relatedItems = items.filter(item =>
       item.meta?.work_package_id === wp.id
     );
 
@@ -100,7 +100,7 @@ export function MapViewPage() {
       if (!i.due_date) return false;
       return new Date(i.due_date) < new Date();
     });
-    const hasHighRiskCR = relatedItems.some(i => 
+    const hasHighRiskCR = relatedItems.some(i =>
       i.type === 'cr' && i.meta?.risk_level === 'high'
     );
 
@@ -154,7 +154,7 @@ export function MapViewPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/work')}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/app/work')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -167,7 +167,7 @@ export function MapViewPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" onClick={() => navigate('/work')}>
+        <Button variant="outline" onClick={() => navigate('/app/work')}>
           <List className="w-4 h-4 mr-2" />
           <label>清單視圖</label>
         </Button>
@@ -226,17 +226,16 @@ export function MapViewPage() {
               return (
                 <Card
                   key={wp.id}
-                  className={`cursor-pointer hover:shadow-[var(--elevation-sm)] transition-all ${
-                    riskInfo ? 'border-destructive/30' : ''
-                  }`}
+                  className={`cursor-pointer hover:shadow-[var(--elevation-sm)] transition-all ${riskInfo ? 'border-destructive/30' : ''
+                    }`}
                   onClick={() => navigate(`/work/${wp.id}`)}
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="flex-1">{wp.title}</h4>
                       {riskInfo && (
-                        <Badge 
-                          variant="outline" 
+                        <Badge
+                          variant="outline"
                           className={`shrink-0 text-${riskInfo.color} border-${riskInfo.color}/30 bg-${riskInfo.color}/5`}
                         >
                           <riskInfo.icon className="w-3 h-3 mr-1" />
@@ -258,11 +257,10 @@ export function MapViewPage() {
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <label className="opacity-70">完成進度</label>
-                        <span className={`${
-                          completionRate === 100 ? 'text-emerald-600' :
-                          completionRate >= 50 ? 'text-primary' :
-                          'text-amber-600'
-                        }`}>
+                        <span className={`${completionRate === 100 ? 'text-emerald-600' :
+                            completionRate >= 50 ? 'text-primary' :
+                              'text-amber-600'
+                          }`}>
                           {completionRate}%
                         </span>
                       </div>
@@ -272,18 +270,18 @@ export function MapViewPage() {
                     {/* Status Badge */}
                     <div className="flex items-center justify-between">
                       <label className="opacity-70">狀態</label>
-                      <Badge 
+                      <Badge
                         variant="outline"
                         className={
                           wp.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                          wp.status === 'in_progress' ? 'bg-primary/10 text-primary border-primary/30' :
-                          wp.status === 'on_hold' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                          'bg-muted text-muted-foreground'
+                            wp.status === 'in_progress' ? 'bg-primary/10 text-primary border-primary/30' :
+                              wp.status === 'on_hold' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                'bg-muted text-muted-foreground'
                         }
                       >
                         {wp.status === 'completed' ? '已完成' :
-                         wp.status === 'in_progress' ? '進行中' :
-                         wp.status === 'on_hold' ? '暫停' : '未開始'}
+                          wp.status === 'in_progress' ? '進行中' :
+                            wp.status === 'on_hold' ? '暫停' : '未開始'}
                       </Badge>
                     </div>
                   </CardContent>

@@ -157,12 +157,12 @@ export function WorkListPage() {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => navigate('/work/map')}
+            onClick={() => navigate('/app/work/map')}
           >
             <MapPin className="w-4 h-4 mr-2" />
             <label>地圖視圖</label>
           </Button>
-          <Button onClick={() => navigate('/inbox')}>
+          <Button onClick={() => navigate('/app/inbox')}>
             <label>從 WBS 建立工作包</label>
           </Button>
         </div>
@@ -299,7 +299,7 @@ export function WorkListPage() {
             <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-[var(--radius-xl)]">
               <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="mb-4">目前沒有工作包</p>
-              <Button onClick={() => navigate('/inbox')}>
+              <Button onClick={() => navigate('/app/inbox')}>
                 <label>從 WBS / 規格書建立工作包</label>
               </Button>
             </div>

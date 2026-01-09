@@ -200,7 +200,7 @@ export function DashboardPage() {
 
   const handleItemClick = (item: NeedsAttentionItem) => {
     // Navigate to task detail page
-    navigate(`/tasks/${item.id}`);
+    navigate(`/app/tasks/${item.id}`);
   };
 
   if (isLoading) {
@@ -351,7 +351,7 @@ export function DashboardPage() {
                 )}
                 {needsAttention.length > 2 && (
                   <button
-                    onClick={() => navigate('/inbox')}
+                    onClick={() => navigate('/app/inbox')}
                     className="w-full text-center text-[10px] text-blue-500 hover:text-blue-600 font-medium py-1"
                   >
                     查看更多事項...

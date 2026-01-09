@@ -218,7 +218,7 @@ export function FeatureDetailPage() {
             if (error) throw error;
 
             toast.success('功能模組已刪除');
-            navigate('/tasks?view=features');
+            navigate('/app/tasks?view=features');
         } catch (error) {
             console.error('Error deleting feature:', error);
             toast.error('刪除失敗');
@@ -300,7 +300,7 @@ export function FeatureDetailPage() {
                         <p className="text-lg font-medium">找不到功能模組</p>
                         <p className="text-muted-foreground">此功能模組可能已被刪除或不存在</p>
                     </div>
-                    <Button onClick={() => navigate('/tasks?view=features')}>
+                    <Button onClick={() => navigate('/app/tasks?view=features')}>
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         返回功能模組列表
                     </Button>
@@ -317,7 +317,7 @@ export function FeatureDetailPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/tasks?view=features')}>
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/app/tasks?view=features')}>
                         <ArrowLeft className="w-4 h-4" />
                     </Button>
                     <div>

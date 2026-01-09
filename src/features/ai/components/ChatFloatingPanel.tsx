@@ -31,7 +31,7 @@ export function ChatFloatingPanel() {
       // 1. Generate Suggestions (不立即建立 Artifact)
       const artifactType = file ? (file.type.startsWith('image/') ? 'image' : 'file') : 'text';
       const content = text || (file ? `[File: ${file.name}]` : '');
-      
+
       const suggestions = await generatorService.generateSuggestions(content, artifactType);
 
       // 2. Create Items with status 'suggestion'
@@ -47,7 +47,7 @@ export function ChatFloatingPanel() {
           source_artifact_id: null, // 暫時不連結 Artifact
           due_date: suggestion.due_date,
           assignee_id: suggestion.assignee_id,
-          meta: { 
+          meta: {
             confidence: suggestion.confidence,
             ...suggestion.meta,
             // 暫存原始內容，等確認入庫時再建立 Artifact
@@ -67,7 +67,7 @@ export function ChatFloatingPanel() {
       toast.success(`已產生 ${createdCount} 張建議卡`, {
         action: {
           label: '前往 Inbox',
-          onClick: () => navigate('/inbox')
+          onClick: () => navigate('/app/inbox')
         }
       });
 
@@ -121,8 +121,8 @@ export function ChatFloatingPanel() {
       </div>
 
       {/* Footer - Input */}
-      <ChatInput 
-        onSend={handleSend} 
+      <ChatInput
+        onSend={handleSend}
         isLoading={isProcessing}
         defaultValue={promptText}
       />

@@ -25,7 +25,7 @@ export function ExecutionMapPage() {
     if (!currentProject) return;
     setLoading(true);
     const storage = getStorageClient();
-    
+
     const [modulesRes, pagesRes, milestonesRes, itemsRes] = await Promise.all([
       storage.getModules(currentProject.id),
       storage.getPages(currentProject.id),
@@ -37,18 +37,18 @@ export function ExecutionMapPage() {
     setPages(pagesRes.data || []);
     setMilestones(milestonesRes.data || []);
     setItems(itemsRes.data || []);
-    
+
     // Seed initial data if empty (Mock Phase)
     if (modulesRes.data?.length === 0) {
       await seedInitialData(currentProject.id);
     }
-    
+
     setLoading(false);
   };
 
   const seedInitialData = async (projectId: string) => {
     const storage = getStorageClient();
-    
+
     // Create Milestones
     const m1 = await storage.createMilestone({
       project_id: projectId,
@@ -57,7 +57,7 @@ export function ExecutionMapPage() {
       end_date: '2025-12-15',
       color: 'rgba(1, 77, 146, 1)'
     });
-    
+
     const m2 = await storage.createMilestone({
       project_id: projectId,
       name: 'Wave 2: 核心功能與儀表板',
@@ -95,7 +95,7 @@ export function ExecutionMapPage() {
         project_id: projectId,
         name: '個人設定',
         status: 'developing',
-        path: '/settings'
+        path: '/app/settings'
       });
     }
 
@@ -105,7 +105,7 @@ export function ExecutionMapPage() {
         project_id: projectId,
         name: '專案工作主頁',
         status: 'designing',
-        path: '/execution'
+        path: '/app/work'
       });
     }
 
@@ -136,13 +136,13 @@ export function ExecutionMapPage() {
           </div>
           <div className="flex gap-2">
             <div className="flex border border-border rounded-lg overflow-hidden">
-              <button 
+              <button
                 onClick={() => setViewMode('structure')}
                 className={`px-4 py-2 text-sm transition-colors ${viewMode === 'structure' ? 'bg-primary text-white' : 'bg-white text-foreground hover:bg-muted'}`}
               >
                 結構視圖
               </button>
-              <button 
+              <button
                 onClick={() => setViewMode('timeline')}
                 className={`px-4 py-2 text-sm transition-colors ${viewMode === 'timeline' ? 'bg-primary text-white' : 'bg-white text-foreground hover:bg-muted'}`}
               >
@@ -191,16 +191,16 @@ export function ExecutionMapPage() {
         {viewMode === 'structure' ? (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {modules.map(module => (
-              <ModuleCard 
-                key={module.id} 
-                module={module} 
+              <ModuleCard
+                key={module.id}
+                module={module}
                 pages={pages.filter(p => p.module_id === module.id)}
                 items={items}
               />
             ))}
           </div>
         ) : (
-          <MilestoneTimeline 
+          <MilestoneTimeline
             milestones={milestones}
             modules={modules}
             pages={pages}

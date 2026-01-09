@@ -166,7 +166,7 @@ export function SourceDetailPage() {
         return (
             <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-4">
                 <div className="text-muted-foreground text-lg">找不到文件</div>
-                <Button variant="outline" onClick={() => navigate('/sources')}>
+                <Button variant="outline" onClick={() => navigate('/app/sources')}>
                     返回文件庫
                 </Button>
             </div>

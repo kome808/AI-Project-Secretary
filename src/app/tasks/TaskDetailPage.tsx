@@ -180,7 +180,7 @@ export function TaskDetailPage() {
             if (error) throw error;
 
             toast.success('任務已刪除');
-            navigate('/tasks');
+            navigate('/app/tasks');
         } catch (error) {
             console.error('Error deleting task:', error);
             toast.error('刪除失敗');
@@ -227,7 +227,7 @@ export function TaskDetailPage() {
                         <p className="text-lg font-medium">找不到任務</p>
                         <p className="text-muted-foreground">此任務可能已被刪除或不存在</p>
                     </div>
-                    <Button onClick={() => navigate('/tasks')}>
+                    <Button onClick={() => navigate('/app/tasks')}>
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         返回任務列表
                     </Button>
@@ -245,7 +245,7 @@ export function TaskDetailPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/tasks')}>
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/app/tasks')}>
                         <ArrowLeft className="w-4 h-4" />
                     </Button>
                     <div>

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Inbox, 
-  CheckSquare, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Inbox,
+  CheckSquare,
+  FileText,
   Settings,
   Menu,
   Map,
@@ -36,11 +36,11 @@ export function Sidebar() {
   };
 
   const navItems = [
-    { name: '儀表板', icon: LayoutDashboard, path: '/' },
-    { name: '收件匣', icon: Inbox, path: '/inbox', badge: inboxCount },
-    { name: '任務清單', icon: CheckSquare, path: '/tasks' },
-    { name: '文件庫', icon: FileText, path: '/sources' },
-    { name: '設定', icon: Settings, path: '/settings' },
+    { name: '儀表板', icon: LayoutDashboard, path: '/app' },
+    { name: '收件匣', icon: Inbox, path: '/app/inbox', badge: inboxCount },
+    { name: '任務清單', icon: CheckSquare, path: '/app/tasks' },
+    { name: '文件庫', icon: FileText, path: '/app/sources' },
+    { name: '設定', icon: Settings, path: '/app/settings' },
   ];
 
   return (

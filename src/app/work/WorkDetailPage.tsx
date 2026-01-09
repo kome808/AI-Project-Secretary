@@ -30,7 +30,7 @@ export function WorkDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { currentProject } = useProject();
   const navigate = useNavigate();
-  
+
   const [loading, setLoading] = useState(true);
   const [workPackage, setWorkPackage] = useState<WorkPackage | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -120,10 +120,10 @@ export function WorkDetailPage() {
   const getCompletionRate = () => {
     if (!workPackage) return 0;
     if (workPackage.completion_rate !== undefined) return workPackage.completion_rate;
-    
+
     const actions = relatedItems.filter(item => item.type === 'action');
     if (actions.length === 0) return 0;
-    
+
     const doneCount = actions.filter(i => i.status === 'done').length;
     return Math.round((doneCount / actions.length) * 100);
   };
@@ -165,7 +165,7 @@ export function WorkDetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/work')}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/app/work')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -218,12 +218,12 @@ export function WorkDetailPage() {
                 <label className="opacity-70">狀態</label>
                 <Badge variant="outline" className={
                   workPackage.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                  workPackage.status === 'in_progress' ? 'bg-primary/10 text-primary border-primary/30' :
-                  'bg-muted text-muted-foreground'
+                    workPackage.status === 'in_progress' ? 'bg-primary/10 text-primary border-primary/30' :
+                      'bg-muted text-muted-foreground'
                 }>
                   {workPackage.status === 'completed' ? '已完成' :
-                   workPackage.status === 'in_progress' ? '進行中' :
-                   workPackage.status === 'on_hold' ? '暫停' : '未開始'}
+                    workPackage.status === 'in_progress' ? '進行中' :
+                      workPackage.status === 'on_hold' ? '暫停' : '未開始'}
                 </Badge>
               </div>
             </div>
@@ -266,8 +266,8 @@ export function WorkDetailPage() {
                   <p>WBS / 規格書（可回溯）</p>
                 </div>
               </div>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => setSelectedArtifactId(workPackage.source_artifact_id!)}
               >
@@ -330,17 +330,16 @@ export function WorkDetailPage() {
             {actions.length > 0 ? (
               <div className="space-y-2">
                 {actions.slice(0, 5).map(item => (
-                  <div 
+                  <div
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-[var(--radius)] hover:bg-muted/30 cursor-pointer"
                     onClick={() => navigate('/actions')}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${
-                        item.status === 'done' ? 'bg-emerald-500' :
-                        item.status === 'blocked' ? 'bg-destructive' :
-                        'bg-primary'
-                      }`} />
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${item.status === 'done' ? 'bg-emerald-500' :
+                          item.status === 'blocked' ? 'bg-destructive' :
+                            'bg-primary'
+                        }`} />
                       <p className="truncate">{item.title}</p>
                     </div>
                     <Badge variant="outline" className="ml-2 shrink-0">
@@ -374,7 +373,7 @@ export function WorkDetailPage() {
             {pending.length > 0 ? (
               <div className="space-y-2">
                 {pending.slice(0, 5).map(item => (
-                  <div 
+                  <div
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-[var(--radius)] hover:bg-muted/30 cursor-pointer"
                     onClick={() => navigate('/pending')}
@@ -411,19 +410,18 @@ export function WorkDetailPage() {
             <CardContent>
               <div className="space-y-2">
                 {crs.slice(0, 5).map(item => (
-                  <div 
+                  <div
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-[var(--radius)] hover:bg-muted/30 cursor-pointer"
                     onClick={() => navigate('/cr')}
                   >
                     <p className="flex-1 truncate">{item.title}</p>
-                    <Badge 
-                      variant="outline" 
-                      className={`ml-2 shrink-0 ${
-                        item.meta?.risk_level === 'high' 
+                    <Badge
+                      variant="outline"
+                      className={`ml-2 shrink-0 ${item.meta?.risk_level === 'high'
                           ? 'bg-destructive text-destructive-foreground border-destructive'
                           : 'bg-amber-100 text-amber-800 border-amber-200'
-                      }`}
+                        }`}
                     >
                       {item.meta?.risk_level === 'high' ? '高風險' : '中風險'}
                     </Badge>
@@ -446,7 +444,7 @@ export function WorkDetailPage() {
             <CardContent>
               <div className="space-y-2">
                 {decisions.slice(0, 5).map(item => (
-                  <div 
+                  <div
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-[var(--radius)] hover:bg-muted/30 cursor-pointer"
                     onClick={() => navigate('/decisions')}
