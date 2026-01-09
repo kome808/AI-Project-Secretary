@@ -13,6 +13,12 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -35,7 +41,9 @@ import {
     X,
     MessageSquare,
     Layers,
-    Briefcase
+    Briefcase,
+    ListChecks,
+    ChevronDown
 } from 'lucide-react';
 import { useProject } from '../context/ProjectContext';
 import { getStorageClient } from '../../lib/storage';
@@ -221,19 +229,65 @@ export function TaskDetailPage() {
         }
     };
 
-    const handleConvert = async () => {
-        if (!item) return;
-        const isFeature = item.meta?.isFeatureModule;
-        const targetType = isFeature ? '一般任務' : '功能模組';
+    // 判斷當前項目類型
+    const isWorkPackage = item?.meta?.isWorkPackage === true;
+    const isFeatureModule = item?.meta?.isFeatureModule === true;
+    const isTodo = item?.type === 'todo';
 
-        if (!confirm(`確定要將此項目轉換為${targetType}嗎？`)) return;
+    // 檢查功能模組專屬欄位是否有內容
+    const hasFeatureContent = !!(
+        item?.meta?.requirementsSpec ||
+        item?.meta?.functionalSpec ||
+        (item?.meta?.designPrototypes && item.meta.designPrototypes.length > 0)
+    );
+
+    // 如果是功能模組且有專屬欄位內容，禁用轉換
+    const isConversionDisabled = isFeatureModule && hasFeatureContent;
+
+    const handleConvert = async (targetType: 'workPackage' | 'featureModule' | 'todo') => {
+        if (!item) return;
+
+        // 檢查是否可以轉換
+        if (isConversionDisabled) {
+            toast.error('此功能模組已有需求規格、功能規格或設計雛形，無法轉換。請先清除這些欄位內容。');
+            return;
+        }
+
+        const typeLabels = {
+            workPackage: '專案工作',
+            featureModule: '功能模組',
+            todo: '待辦事項'
+        };
+
+        if (!confirm(`確定要將此項目轉換為${typeLabels[targetType]}嗎？`)) return;
 
         const storage = getStorageClient();
         try {
-            await storage.updateItem(item.id, {
-                meta: { ...item.meta, isFeatureModule: !isFeature }
-            });
-            toast.success(`已轉換為${targetType}`);
+            let updates: Partial<Item> = {};
+
+            switch (targetType) {
+                case 'workPackage':
+                    updates = {
+                        type: 'general',
+                        meta: { ...item.meta, isWorkPackage: true, isFeatureModule: false }
+                    };
+                    break;
+                case 'featureModule':
+                    updates = {
+                        type: 'general',
+                        meta: { ...item.meta, isFeatureModule: true, isWorkPackage: false }
+                    };
+                    break;
+                case 'todo':
+                    updates = {
+                        type: 'todo',
+                        meta: { ...item.meta, isWorkPackage: false, isFeatureModule: false }
+                    };
+                    break;
+            }
+
+            await storage.updateItem(item.id, updates);
+            toast.success(`已轉換為${typeLabels[targetType]}`);
             loadData();
         } catch (error) {
             console.error('Error converting item:', error);
@@ -308,19 +362,47 @@ export function TaskDetailPage() {
                                 <Edit2 className="w-4 h-4 mr-1" />
                                 編輯
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleConvert}>
-                                {item.meta?.isFeatureModule ? (
-                                    <>
-                                        <Briefcase className="w-4 h-4 mr-1" />
-                                        轉為普通任務
-                                    </>
-                                ) : (
-                                    <>
-                                        <Layers className="w-4 h-4 mr-1" />
-                                        轉為功能模組
-                                    </>
-                                )}
-                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        轉換類型
+                                        <ChevronDown className="w-4 h-4 ml-1" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    {/* 轉換為專案工作 - 功能模組和待辦事項可見 */}
+                                    {(isFeatureModule || isTodo) && (
+                                        <DropdownMenuItem
+                                            onClick={() => handleConvert('workPackage')}
+                                            disabled={isConversionDisabled}
+                                            className={isConversionDisabled ? 'opacity-50' : ''}
+                                        >
+                                            <Briefcase className="w-4 h-4 mr-2" />
+                                            轉換為專案工作
+                                            {isConversionDisabled && <span className="ml-2 text-xs text-muted-foreground">(有欄位內容)</span>}
+                                        </DropdownMenuItem>
+                                    )}
+                                    {/* 轉換為功能模組 - 專案工作和待辦事項可見 */}
+                                    {(isWorkPackage || isTodo || (!isWorkPackage && !isFeatureModule && !isTodo)) && (
+                                        <DropdownMenuItem onClick={() => handleConvert('featureModule')}>
+                                            <Layers className="w-4 h-4 mr-2" />
+                                            轉換為功能模組
+                                        </DropdownMenuItem>
+                                    )}
+                                    {/* 轉換為待辦事項 - 專案工作和功能模組可見 */}
+                                    {(isWorkPackage || isFeatureModule || (!isWorkPackage && !isFeatureModule && !isTodo)) && (
+                                        <DropdownMenuItem
+                                            onClick={() => handleConvert('todo')}
+                                            disabled={isConversionDisabled}
+                                            className={isConversionDisabled ? 'opacity-50' : ''}
+                                        >
+                                            <ListChecks className="w-4 h-4 mr-2" />
+                                            轉換為待辦事項
+                                            {isConversionDisabled && <span className="ml-2 text-xs text-muted-foreground">(有欄位內容)</span>}
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>
                                 <Trash2 className="w-4 h-4 mr-1" />
                                 {isDeleting ? '刪除中...' : '刪除'}
