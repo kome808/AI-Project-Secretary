@@ -47,32 +47,70 @@ export function LandingPage() {
                     </div>
 
                     <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1] animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
-                        專案管理的
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600"> 智慧進化</span>
+                        貼心的
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600"> AI 專案秘書</span>
                     </h1>
 
                     <p className="text-lg md:text-xl text-slate-500 leading-relaxed max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
                         結合 AI 語意分析協助專案進度管理與任務規劃，從晨間簡報到動態 WBS，您的 24/7 全能專案助理。
                     </p>
 
-                    <div className="pt-8 animate-in fade-in zoom-in duration-700 delay-300">
-                        {/* Visual Placeholder for Dashboard/Chat Interface */}
-                        <div className="relative rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/50 overflow-hidden">
-                            <div className="aspect-[16/9] bg-slate-50 rounded-xl overflow-hidden relative group">
-                                {/* Abstract UI Representation */}
-                                <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-                                    <div className="grid grid-cols-12 gap-4 w-3/4 opacity-80 group-hover:scale-105 transition-transform duration-700">
-                                        <div className="col-span-4 h-32 bg-white rounded-lg shadow-sm border border-slate-100/50"></div>
-                                        <div className="col-span-8 h-32 bg-white rounded-lg shadow-sm border border-slate-100/50"></div>
-                                        <div className="col-span-12 h-48 bg-white rounded-lg shadow-sm border border-slate-100/50"></div>
-                                    </div>
+                    <div className="pt-12 pb-8 animate-in fade-in zoom-in duration-700 delay-300">
+                        {/* Illustration: From Chaos to Order */}
+                        <div className="relative max-w-4xl mx-auto h-[320px] rounded-3xl bg-gradient-to-b from-blue-50/50 to-white border border-slate-100/50 shadow-xl shadow-slate-200/40 overflow-hidden flex items-center justify-center">
+
+                            {/* Background Elements */}
+                            <div className="absolute inset-0 grid grid-cols-[repeat(20,minmax(0,1fr))] opacity-[0.03] pointer-events-none">
+                                {Array.from({ length: 400 }).map((_, i) => (
+                                    <div key={i} className="border-r border-slate-900/10 h-full"></div>
+                                ))}
+                            </div>
+
+                            {/* Left Side: Chaos (Floating Icons) */}
+                            <div className="absolute left-12 top-1/2 -translate-y-1/2 w-48 h-48">
+                                <div className="absolute top-0 left-4 p-3 bg-white rounded-2xl shadow-sm border border-slate-200 transform -rotate-12 animate-in fade-in slide-in-from-left-8 duration-1000 delay-300">
+                                    <MessageSquare className="w-6 h-6 text-slate-400" />
                                 </div>
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <Button variant="outline" className="bg-white/80 backdrop-blur shadow-sm hover:bg-white" onClick={() => navigate('/app')}>
-                                        預覽系統介面
-                                    </Button>
+                                <div className="absolute top-16 right-0 p-3 bg-white rounded-2xl shadow-sm border border-slate-200 transform rotate-6 animate-in fade-in slide-in-from-left-8 duration-1000 delay-500">
+                                    <div className="w-6 h-6 border-2 border-slate-300 rounded-md border-dashed"></div>
+                                </div>
+                                <div className="absolute bottom-4 left-8 p-3 bg-white rounded-2xl shadow-sm border border-slate-200 transform -rotate-6 animate-in fade-in slide-in-from-left-8 duration-1000 delay-700">
+                                    <div className="w-24 h-2 bg-slate-200 rounded-full mb-1"></div>
+                                    <div className="w-16 h-2 bg-slate-100 rounded-full"></div>
                                 </div>
                             </div>
+
+                            {/* Center: AI Processing (Connecting Lines & Pulse) */}
+                            <div className="relative z-10 mx-auto">
+                                <div className="relative flex items-center justify-center w-24 h-24 bg-blue-600 rounded-3xl shadow-lg shadow-blue-500/30 animate-pulse">
+                                    <Sparkles className="w-10 h-10 text-white" />
+                                </div>
+                                {/* Connecting Beams */}
+                                <div className="absolute top-1/2 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-400 to-transparent -z-10 blur-[1px]"></div>
+                            </div>
+
+                            {/* Right Side: Order (Structured Tasks) */}
+                            <div className="absolute right-12 top-1/2 -translate-y-1/2 w-56 space-y-3">
+                                <div className="flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border border-slate-100 animate-in fade-in slide-in-from-right-8 duration-1000 delay-300">
+                                    <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                                        <ShieldCheck className="w-3 h-3" />
+                                    </div>
+                                    <div className="h-2 bg-slate-800 rounded-full w-24 opacity-80"></div>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border border-slate-100 ml-4 animate-in fade-in slide-in-from-right-8 duration-1000 delay-500">
+                                    <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                        <Zap className="w-3 h-3" />
+                                    </div>
+                                    <div className="h-2 bg-slate-800 rounded-full w-20 opacity-60"></div>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border border-slate-100 animate-in fade-in slide-in-from-right-8 duration-1000 delay-700">
+                                    <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                                        <BarChart3 className="w-3 h-3" />
+                                    </div>
+                                    <div className="h-2 bg-slate-800 rounded-full w-28 opacity-70"></div>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </section>
