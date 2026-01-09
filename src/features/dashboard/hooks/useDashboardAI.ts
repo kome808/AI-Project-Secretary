@@ -49,12 +49,12 @@ export const useDashboardAI = ({ currentProject, members, setTaskPreview, items 
     // 新增：暫存待處理的檔案內容（用於多輪對話意圖確認）
     const [pendingFile, setPendingFile] = useState<{
         file: File;
-        parsedContent: { type: string; content: string };
+        parsedContent: { content: string; type: string };
         fileType: string;
         storagePath: string;
         fileUrl: string;
         fileSize: number;
-        artifactId: string;
+        artifactId?: string;
     } | null>(null);
 
     const addMessage = (role: 'user' | 'assistant', content: string, citations?: any[]) => {
@@ -103,6 +103,8 @@ export const useDashboardAI = ({ currentProject, members, setTaskPreview, items 
     const handleAIInput = async (input: string, file?: File) => {
         if (!currentProject) return;
 
+        console.log('🤖 handleAIInput Triggered:', { input, hasFile: !!file, hasPendingFile: !!pendingFile });
+
         // Add User Message to Chat History
         addMessage('user', input || (file ? `上傳了檔案: ${file.name}` : ''));
 
@@ -111,10 +113,12 @@ export const useDashboardAI = ({ currentProject, members, setTaskPreview, items 
 
         // 檢查是否為針對暫存檔案的後續指令
         if (!file && pendingFile && input) {
+            console.log('🔍 Processing input for Pending File:', { input, hasPendingFile: !!pendingFile });
             const featureModuleKeywords = ['功能模組', '模組清單', '功能列表', '系統功能', '開發清單', '功能需求'];
             const isFeatureModuleRequest = featureModuleKeywords.some(keyword => input.includes(keyword)) || input.includes('建立功能模組');
 
             if (isFeatureModuleRequest) {
+                console.log('🚀 Detected Feature Module Request');
                 // 🎯 功能模組分析 - 使用 pending file 內容
                 try {
                     setStatusMessage('AI 秘書正在分析功能模組...');
@@ -295,6 +299,7 @@ ${analysis.reasoning || ''}
         if (!shouldTrigger) return false;
 
         try {
+            console.log('🧠 processSmartAnalysis Triggered:', { input, hasContent: !!content });
             setStatusMessage('AI 秘書正在分析文件並規劃任務...');
             const storage = getStorageClient();
             const { data: aiConfig } = await storage.getSystemAIConfig();
@@ -347,7 +352,8 @@ ${analysis.reasoning || ''}
                 const sysPrompt = `你是一位專業的專案經理與系統分析師。請深入分析提供的會議記錄或文件，識別出以下三類項目：
 1. 待辦事項 (Todos) - 會議中指派的具體待辦事項 (Action Items)。(Type: 'todo')
 2. 重要決議 (Decisions) - 已達成的共識或是確認的事項。(Type: 'decision')
-3. 變更需求 (Features/CR) - 對功能或流程的調整、新增。(Type: 'cr')
+3. 變更需求 (Features/CR) - 會議中討論到的系統功能需求、規格重點或變更申請。(Type: 'cr')
+4. 潛在功能 (Features) - 明確提到的系統功能模組或需求，但尚未確立為變更。(Type: 'cr')
 
 🔥 重要：以下是此專案目前的功能模組與專案工作架構。如果文件內容談論的是與其中某個節點相關的需求或任務，請在 target_node_id 欄位填入該節點的 ID。如果無法判斷屬於哪個節點，請留空或填 null。
 
@@ -410,7 +416,7 @@ ${projectStructure}
                         tasks: parsedItems.map((t: any) => ({
                             id: `ai-${Date.now()}-${Math.random().toString(36).slice(2)}`,
                             selected: true,
-                            title: `[${t.type === 'decision' ? '決議' : t.type === 'cr' ? '變更' : '待辦'}] ${t.title}`,
+                            title: `[${t.type === 'decision' ? '決議' : t.type === 'cr' ? '需求/變更' : '待辦'}] ${t.title}`,
                             description: t.description || '',
                             priority: (t.priority || 'medium') as 'high' | 'medium' | 'low',
                             type: t.type || 'todo',
@@ -564,8 +570,8 @@ ${parsedContent!.content.substring(0, 2000)}`;
                                 suggestionMsg = `我偵測到這是一份**專案任務清單 (WBS)**。💡\n建議為您**建立專案工作**，以進行時程管理。`;
                                 suggestions = ['建立專案工作', '分析關鍵路徑', '摘要重點'];
                             } else if (detectedType.includes('MeetingNotes')) {
-                                suggestionMsg = `我偵測到這是一份**會議記錄**。💡\n建議為您**整理待辦事項**與決議。`;
-                                suggestions = ['整理會議記錄', '摘要重點'];
+                                suggestionMsg = `我偵測到這是一份**會議記錄**。💡\n建議為您**整理待辦事項**與決議，或從中**識別功能需求**。`;
+                                suggestions = ['整理會議記錄', '建立功能模組', '摘要重點'];
                             }
                         }
                     } catch (e) {
@@ -961,13 +967,9 @@ ${analysis.reasoning || ''}
                         // 若意圖不明確或信心度過低，直接回覆請求確認（跳過 RAG）
                         if (intentResult.intent === 'ambiguous' || intentResult.confidence < 0.6) {
                             console.log('🤔 Ambiguous Intent:', intentResult);
-                            addMessage({
-                                id: crypto.randomUUID(),
-                                role: 'ai',
-                                content: intentResult.reply || '不好意思，我不太確定您的意思，能否多提供一點細節？',
-                                timestamp: new Date().toISOString()
-                            });
-                            setStatus('ready');
+                            addMessage('assistant', (intentResult as any).reply || '不好意思，我不太確定您的意思，能否多提供一點細節？');
+                            setStatusMessage('');
+                            setIsAIProcessing(false);
                             setPendingFile(null);
                             return;
                         }
@@ -985,12 +987,21 @@ ${analysis.reasoning || ''}
                         // console.log('🔍 [AI Chat Debug] Querying Knowledge Base...', { query: input, projectId: currentProject.id });
 
                         // Lower threshold to 0.3 for debugging
-                        const searchRes = await storage.queryKnowledgeBase(input || '', currentProject.id, 0.3);
+                        const searchRes = await storage.queryKnowledgeBase(input || '', currentProject.id, 0.25, 10);
 
                         // console.log('🔍 [AI Chat Debug] Search Result:', searchRes);
 
                         if (searchRes.data && searchRes.data.documents && searchRes.data.documents.length > 0) {
                             const rawDocs = searchRes.data.documents;
+
+                            // 🐛 DEBUG: Log similarity scores BEFORE filtering
+                            console.log(`🔍 [RAG Debug] Found ${rawDocs.length} raw results with scores:`,
+                                rawDocs.map((d: any) => ({
+                                    fileName: d.metadata?.file_name || d.metadata?.fileName || 'unknown',
+                                    similarity: d.similarity || 'N/A',
+                                    contentPreview: (d.content || d.pageContent || '').substring(0, 50)
+                                }))
+                            );
 
                             // 🔍 Deduplicate by content (Safety Net)
                             const seenContent = new Set();
@@ -1002,18 +1013,27 @@ ${analysis.reasoning || ''}
                             });
 
                             // 取前 5 個最相關的結果
-                            const validDocs = references.slice(0, 5);
+                            const validDocs = references.slice(0, 10);
 
                             if (validDocs.length > 0) {
+                                // Build clean citation list
+                                const citationList = validDocs.map((doc, i) => {
+                                    const fileName = doc.metadata?.file_name || doc.metadata?.fileName || doc.metadata?.title || '未知文件';
+                                    const sourceId = doc.metadata?.source_id || doc.metadata?.id;
+                                    // Link to document detail page (now using /sources/:id route)
+                                    const sourceLink = sourceId ? `/sources/${sourceId}` : '#';
+                                    return `${i + 1}. [${fileName}](${sourceLink})`;
+                                }).join('\n');
+
+
                                 knowledgeContext = `
 【參考知識庫內容】：
 ${validDocs.map((doc, i) => {
-                                    const fileName = doc.metadata?.fileName || '未知文件';
-                                    const sourceId = doc.metadata?.source_id || doc.metadata?.id;
-                                    // Generate Markdown Link for clickable source
-                                    const sourceLink = sourceId ? `[${fileName}](#/sources?id=${sourceId})` : fileName;
-                                    return `文件 ${i + 1}: ${doc.content.substring(0, 500)}... (來源: ${sourceLink})`;
+                                    return `--- 摘錄 ${i + 1} ---\n${doc.content.substring(0, 1500)}...`;
                                 }).join('\n\n')}
+
+**資料來源：**
+${citationList}
 `;
                                 console.log('✅ [AI Chat Debug V4] Detected Source IDs:',
                                     validDocs.map(d => d.metadata?.source_id || d.metadata?.id)
@@ -1028,6 +1048,7 @@ ${validDocs.map((doc, i) => {
                     } catch (e) {
                         console.error('❌ [AI Chat Debug] RAG Search failed:', e);
                     }
+
 
                     setStatusMessage('AI 正在思考...');
 

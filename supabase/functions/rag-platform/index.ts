@@ -42,8 +42,10 @@ serve(async (req) => {
         const url = new URL(req.url);
         const path = url.pathname.split('/').pop(); // "embed" or "query"
 
-        // Initialize Supabase Client for public schema operations (embeddings)
-        const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+        // Initialize Supabase Client with aiproject schema (where embeddings table lives)
+        const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+            db: { schema: 'aiproject' }
+        });
 
         // Fetch API Key dynamically using helper
         const OPENAI_API_KEY = await getOpenAIKey(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);

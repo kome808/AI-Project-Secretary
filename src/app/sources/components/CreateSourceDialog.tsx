@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { RecursiveCharacterTextSplitter } from '@/lib/utils/textSplitter';
 
 interface CreateSourceDialogProps {
   open: boolean;
@@ -255,25 +256,22 @@ export function CreateSourceDialog({ open, onClose, onCreated }: CreateSourceDia
       });
 
       if (error) throw error;
+      if (!data) throw new Error('Artifact creation returned no data');
 
       // 🔥 Trigger RAG Embedding
       toast.loading('正在建立 RAG 索引...', { id: 'embed' });
       try {
-        const MAX_CHUNK_SIZE = 8000; // chars (~2000-3000 tokens), safe for small model
-        const OVERLAP = 500;
+        const splitter = new RecursiveCharacterTextSplitter({
+          chunkSize: 1000,
+          chunkOverlap: 200
+        });
 
         let contentToEmbed = finalContent;
         if (!contentToEmbed || contentToEmbed.length === 0) {
           contentToEmbed = data.meta?.file_name || 'Untitled Artifact';
         }
 
-        // Simple chunking
-        const chunks = [];
-        for (let i = 0; i < contentToEmbed.length; i += (MAX_CHUNK_SIZE - OVERLAP)) {
-          let end = Math.min(i + MAX_CHUNK_SIZE, contentToEmbed.length);
-          chunks.push(contentToEmbed.substring(i, end));
-          if (end === contentToEmbed.length) break;
-        }
+        const chunks = splitter.splitText(contentToEmbed);
 
         console.log(`[RAG] Chunking content into ${chunks.length} parts`);
 

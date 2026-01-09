@@ -397,7 +397,11 @@ export function DraggableWBSCard({
               轉換為功能模組
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => onDeleteItem(item.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Use setTimeout to allow dropdown to close before state update triggers dialog
+                setTimeout(() => onDeleteItem(item.id), 0);
+              }}
               className="text-destructive"
             >
               <Trash2 className="h-4 w-4 mr-2" />

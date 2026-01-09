@@ -303,8 +303,8 @@ export class SupabaseAdapter implements StorageAdapter {
   async queryKnowledgeBase(
     query: string,
     projectId: string,
-    threshold = 0.5,
-    matchCount = 5
+    threshold = 0.25,
+    matchCount = 10
   ): Promise<StorageResponse<{ documents: any[] }>> {
     try {
       const supabaseUrl = localStorage.getItem('supabase_url');
@@ -319,10 +319,14 @@ export class SupabaseAdapter implements StorageAdapter {
       const baseUrl = supabaseUrl.replace(/\/$/, '');
       const functionUrl = `${baseUrl}/functions/v1/${functionName}${routePath}`;
 
+
+      console.log(`🔍 [RAG] Searching: "${query}" (Threshold: ${threshold}, Match: ${matchCount})`);
+
       // 1. Try Remote RAG
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
+          'apikey': publicAnonKey,
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${publicAnonKey}`
         },
@@ -335,6 +339,8 @@ export class SupabaseAdapter implements StorageAdapter {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ [RAG] Edge Function Error:', response.status, errorText);
         throw new Error(`RAG Function failed: ${response.statusText}`);
       }
 
@@ -346,15 +352,18 @@ export class SupabaseAdapter implements StorageAdapter {
       if (documents.length > 0) {
         // 1. First Pass: Filter out docs without ANY ID (Zombie Vectors)
         documents = documents.filter((d: any) => {
-          const id = d.metadata?.source_id || d.metadata?.id;
-          return id && typeof id === 'string';
+          // Check both root properties and metadata properties
+          const id = d.source_id || d.id || d.metadata?.source_id || d.metadata?.id;
+          return id && (typeof id === 'string' || typeof id === 'number');
         });
 
+        /*
         const sourceIds = documents.map((d: any) => d.metadata?.source_id || d.metadata?.id).filter(Boolean);
 
         if (sourceIds.length > 0) {
           const schemaName = getSchemaName();
           // 🔥 strict validation: check id AND project_id AND archived=false
+          // Note: Temporarily disabled because source_id from PDF upload might not match artifacts table if items table migration is WIP
           const { data: validArtifacts } = await this.supabase
             .schema(schemaName)
             .from('artifacts')
@@ -363,26 +372,29 @@ export class SupabaseAdapter implements StorageAdapter {
             .eq('project_id', projectId)
             .eq('archived', false);
 
-          // console.log('[RAG] Valid Artifacts Found in DB:', validArtifacts?.length);
-
           const validIdSet = new Set(validArtifacts?.map(a => a.id));
 
           // 2. Second Pass: Filter out docs that don't match a VALID artifact in DB
           documents = documents.filter((d: any) => {
-            const id = d.metadata?.source_id || d.metadata?.id;
-            return id && validIdSet.has(id);
-          });
-
-          // 🧹 Deduplication: Remove identical chunks (same content)
-          const seenContent = new Set();
-          documents = documents.filter((d: any) => {
-            const contentSig = d.pageContent?.trim() || '';
-            if (seenContent.has(contentSig)) return false;
-            seenContent.add(contentSig);
-            return true;
+             // For now, trust the RAG result. If we strictly filter against artifacts, we might lose valid PDF chunks 
+             // if the artifact mapping is complex (or if it's in 'items' table effectively).
+             return true; 
+             // const id = d.metadata?.source_id || d.metadata?.id;
+             // return id && validIdSet.has(id);
           });
         }
+        */
+
+        // 🧹 Deduplication: Remove identical chunks (same content)
+        const seenContent = new Set();
+        documents = documents.filter((d: any) => {
+          const contentSig = (d.content || d.pageContent || '').trim();
+          if (seenContent.has(contentSig)) return false;
+          seenContent.add(contentSig);
+          return true;
+        });
       }
+
 
       return { data: { documents }, error: null };
 

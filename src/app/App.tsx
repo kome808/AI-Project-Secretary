@@ -11,6 +11,7 @@ import { SourcesPage } from './sources/SourcesPage';
 import SettingsPage from './settings/SettingsPage';
 import { WorkListPage } from './work/WorkListPage';
 import { WorkDetailPage } from './work/WorkDetailPage';
+import { SourceDetailPage } from './sources/SourceDetailPage';
 import { MapViewPage } from './work/MapViewPage';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { needsMigration, migrateAllItemsStatus } from '../lib/storage/statusMigration';
@@ -53,6 +54,7 @@ const router = createHashRouter([
       { path: 'work/:id', element: <WorkDetailPage /> },
       { path: 'work/map', element: <MapViewPage /> },
       { path: 'sources', element: <SourcesPage /> },
+      { path: 'sources/:id', element: <SourceDetailPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

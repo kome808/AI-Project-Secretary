@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
 import { Artifact, Item } from '@/lib/storage/types';
 import { getStorageClient } from '@/lib/storage';
@@ -20,13 +21,14 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { SourceCard } from './components/SourceCard';
-import { SourceDetailPanel } from './components/SourceDetailPanel';
+// SourceDetailPanel removed
 import { CreateSourceDialog } from './components/CreateSourceDialog';
 import { useSources, SourceType, UsageFilter } from '@/features/sources/hooks/useSources';
 import { getCurrentUser, isSystemAdmin } from '@/lib/permissions/statusPermissions';
 
 export function SourcesPage() {
   const { currentProject } = useProject();
+  const navigate = useNavigate();
 
   const {
     isLoading,
@@ -56,8 +58,6 @@ export function SourcesPage() {
   } = useSources();
 
   // Local UI State
-  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
@@ -171,8 +171,7 @@ export function SourcesPage() {
   };
 
   const handleSelectArtifact = (artifact: Artifact) => {
-    setSelectedArtifact(artifact);
-    setIsPanelOpen(true);
+    navigate(`/sources/${artifact.id}`);
   };
 
   if (!currentProject) {
@@ -527,13 +526,7 @@ export function SourcesPage() {
       }
 
       {/* Detail Panel */}
-      <SourceDetailPanel
-        artifact={selectedArtifact}
-        items={items}
-        open={isPanelOpen}
-        onClose={() => setIsPanelOpen(false)}
-        onUpdate={refresh}
-      />
+
 
 
 

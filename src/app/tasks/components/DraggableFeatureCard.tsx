@@ -232,7 +232,11 @@ export function DraggableFeatureCard({
                             轉換為一般任務
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                            onClick={() => onDelete(feature.id)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                // 使用 setTimeout 避免 Dropdown 關閉時與 window.confirm 衝突
+                                setTimeout(() => onDelete(feature.id), 0);
+                            }}
                             className="text-destructive"
                         >
                             <Trash2 className="h-4 w-4 mr-2" />

@@ -23,6 +23,16 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useProject } from '../../context/ProjectContext';
 import { getStorageClient } from '../../../lib/storage';
 import { toast } from 'sonner';
@@ -52,6 +62,7 @@ export function FeaturesView({
     const [showFeatureDialog, setShowFeatureDialog] = useState(false);
     const [editingFeature, setEditingFeature] = useState<Item | undefined>(undefined);
     const [editingParentId, setEditingParentId] = useState<string | undefined>(undefined);
+    const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
     // Filter feature modules (items with meta.isFeatureModule = true)
     const featureModules = useMemo(() => {
@@ -226,20 +237,25 @@ export function FeaturesView({
         }
     };
 
-    const handleDeleteFeature = async (featureId: string) => {
-        if (!confirm('確定要刪除此功能模組嗎？')) return false;
+    const handleDeleteFeature = (featureId: string) => {
+        // Only open dialog, don't delete yet
+        setItemToDelete(featureId);
+    };
+
+    const confirmDelete = async () => {
+        if (!itemToDelete) return;
 
         const storage = getStorageClient();
         try {
-            const { error } = await storage.deleteItem(featureId);
+            const { error } = await storage.deleteItem(itemToDelete);
             if (error) throw error;
             toast.success('功能模組已刪除');
             onRefresh();
-            return true;
         } catch (error) {
             console.error('Error deleting feature:', error);
-            toast.error('刪除失敗');
-            return false;
+            toast.error('刪除失敗：可能包含子任務或其他關聯');
+        } finally {
+            setItemToDelete(null);
         }
     };
 
@@ -361,6 +377,24 @@ export function FeaturesView({
                 onOpenChange={setShowFeatureDialog}
                 onSave={handleSaveFeature}
             />
+
+            {/* Delete Confirmation Alert */}
+            <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>確定要刪除此項目嗎？</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            此動作無法復原。如果該模組底下還有子項目，請先刪除子項目。
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">
+                            確定刪除
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </DndProvider>
     );
 }

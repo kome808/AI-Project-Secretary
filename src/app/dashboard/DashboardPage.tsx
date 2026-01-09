@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +28,9 @@ import { TaskSuggestion } from '@/features/ai/components/TaskPreviewCard';
 // Legacy Util for task planning confirmation
 import { getStorageClient } from '@/lib/storage';
 import { HelpTooltip } from '@/components/common/HelpTooltip';
+
 import { tooltips } from '@/lib/help/helpContent';
+import { MarkdownText } from '@/components/common/MarkdownText';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -379,7 +381,7 @@ export function DashboardPage() {
                           ${msg.role === 'user'
                         ? 'bg-primary text-primary-foreground rounded-tr-none'
                         : 'bg-white border border-slate-100/60 rounded-tl-none text-slate-700'}`}>
-                      {msg.content}
+                      <MarkdownText content={msg.content} />
                     </div>
                   </div>
                 ))}
@@ -425,14 +427,27 @@ export function DashboardPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions / Suggestions */}
           <div className="flex flex-wrap gap-2 shrink-0 pt-2">
-            {aiQuickActions.map(action => (
+            {(aiSuggestions.length > 0 ? aiSuggestions : aiQuickActions).map((action, idx) => (
               <button
-                key={action}
-                onClick={() => handleQuickAction(action)}
-                className="px-3 py-1.5 rounded-full bg-white border border-blue-100 text-xs text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-colors shadow-sm"
+                key={`${action}-${idx}`}
+                onClick={() => {
+                  if (aiSuggestions.length > 0) {
+                    // Dynamic suggestion: Auto-send
+                    handleSendMessage(action);
+                  } else {
+                    // Static action: Pre-fill input
+                    handleQuickAction(action);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs transition-colors shadow-sm border
+                  ${aiSuggestions.length > 0
+                    ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                    : 'bg-white border-blue-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
+                  }`}
               >
+                {aiSuggestions.length > 0 && <Sparkles className="w-3 h-3 inline-block mr-1" />}
                 {action}
               </button>
             ))}

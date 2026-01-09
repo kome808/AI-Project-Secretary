@@ -1,9 +1,20 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { RefreshCw, Briefcase, Plus, Eye, EyeOff } from 'lucide-react';
 import { Item, Member, WorkPackage } from '../../../lib/storage/types';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { DraggableWBSCard } from '../components/DraggableWBSCard';
 import { WorkPackageEditDialog } from '../components/WorkPackageEditDialog';
@@ -39,6 +50,7 @@ export function ProjectWorkView({
     // 默認展開未分類區塊
     return new Set(['uncategorized']);
   });
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   // Dialog states
   const [showWorkPackageDialog, setShowWorkPackageDialog] = useState(false);
@@ -57,6 +69,9 @@ export function ProjectWorkView({
   const visibleItems = useMemo(() => {
     // 排除已標記為功能模組的項目 (它們在功能模組頁面管理)
     let filtered = items.filter(item => !item.meta?.isFeatureModule);
+
+    // 排除 AI 建議項目 (它們屬於收件匣)
+    filtered = filtered.filter(item => item.status !== 'suggestion');
 
     if (!showCompleted) {
       filtered = filtered.filter(item => item.status !== 'completed');
@@ -166,7 +181,7 @@ export function ProjectWorkView({
     }
 
     if (!draggedItem || !targetItem) {
-      console.log(`[handleMoveItem] 找不到項目: dragged=${draggedId}, target=${targetId}`);
+      console.log(`[handleMoveItem] 找不到項目: dragged = ${draggedId}, target = ${targetId} `);
       return;
     }
 
@@ -175,8 +190,8 @@ export function ProjectWorkView({
     const isTargetWP = !!targetWP;
 
     console.log(`[handleMoveItem] 移動項目: ${draggedItem.title} → ${targetItem.title} (${position})`);
-    console.log(`  - 被拖曳項目: ${isDraggedWP ? 'WorkPackage' : 'Item'}, parent_id: ${draggedItem.parent_id || '(無)'}`);
-    console.log(`  - 目標項目: ${isTargetWP ? 'WorkPackage' : 'Item'}, parent_id: ${targetItem.parent_id || '(無)'}`);
+    console.log(`  - 被拖曳項目: ${isDraggedWP ? 'WorkPackage' : 'Item'}, parent_id: ${draggedItem.parent_id || '(無)'} `);
+    console.log(`  - 目標項目: ${isTargetWP ? 'WorkPackage' : 'Item'}, parent_id: ${targetItem.parent_id || '(無)'} `);
 
     // === WorkPackage 之間的排序 ===
     if (isDraggedWP && isTargetWP) {
@@ -214,7 +229,7 @@ export function ProjectWorkView({
         newOrder = (prevOrder + nextOrder) / 2;
       }
 
-      console.log(`  → 更新 WorkPackage 排序: order = ${newOrder}`);
+      console.log(`  → 更新 WorkPackage 排序: order = ${newOrder} `);
 
       await handleUpdateWorkPackage(draggedId, {
         meta: { ...draggedWP.meta, order: newOrder }
@@ -305,7 +320,7 @@ export function ProjectWorkView({
         newOrder = (prevOrder + nextOrder) / 2;
       }
 
-      console.log(`  → 更新排序: order = ${newOrder}, 目標位置索引: ${targetIndex}`);
+      console.log(`  → 更新排序: order = ${newOrder}, 目標位置索引: ${targetIndex} `);
 
       if (isDraggedWP && draggedWP) {
         // 被拖曳的是舊的 WorkPackage（在 work_packages 表中）
@@ -517,7 +532,7 @@ export function ProjectWorkView({
       newOrder = (prevOrder + nextOrder) / 2;
     }
 
-    console.log(`[handleMoveWorkPackage] 更新排序: order = ${newOrder}`);
+    console.log(`[handleMoveWorkPackage] 更新排序: order = ${newOrder} `);
 
     // Persist to backend
     await handleUpdateWorkPackage(draggedId, {
@@ -582,17 +597,26 @@ export function ProjectWorkView({
     }
   };
 
-  const handleDeleteItem = async (itemId: string) => {
+  const handleDeleteItem = (itemId: string) => {
+    // Open dialog
+    setItemToDelete(itemId);
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+
     const storage = getStorageClient();
     try {
-      const { error } = await storage.deleteItem(itemId);
+      const { error } = await storage.deleteItem(itemToDelete);
       if (error) throw error;
 
+      toast.success('已刪除任務');
       onRefresh();
-      return true;
     } catch (error) {
       console.error('Error deleting item:', error);
-      return false;
+      toast.error('刪除失敗：可能包含子任務或其他關聯');
+    } finally {
+      setItemToDelete(null);
     }
   };
 
@@ -644,15 +668,15 @@ export function ProjectWorkView({
           const isChildExpanded = expandedGroups.has(child.id);
 
           return (
-            <div key={child.id} id={`task-${child.id}`} className="relative transition-all duration-300">
+            <div key={child.id} id={`task - ${child.id} `} className="relative transition-all duration-300">
               {/* Indent Line (Vertical) - only if level > 1 (children of WP) */}
               <div
                 className="absolute left-0 top-0 bottom-0 border-l-2 border-muted"
-                style={{ marginLeft: `${(level - 1) * 1.5}rem` }}
+                style={{ marginLeft: `${(level - 1) * 1.5} rem` }}
               />
 
               {/* Horizontal Line - to self */}
-              <div style={{ marginLeft: `${level * 1.5}rem` }} className="relative">
+              <div style={{ marginLeft: `${level * 1.5} rem` }} className="relative">
                 <div className="absolute left-0 top-1/2 w-4 border-t-2 border-muted" style={{ marginLeft: '-1.5rem' }} />
 
                 <DraggableWBSCard
@@ -756,7 +780,7 @@ export function ProjectWorkView({
               const isExpanded = expandedGroups.has(rootItem.id);
 
               return (
-                <div key={rootItem.id} id={`task-${rootItem.id}`} className="relative transition-all duration-300">
+                <div key={rootItem.id} id={`task - ${rootItem.id} `} className="relative transition-all duration-300">
                   <DraggableWBSCard
                     item={rootItem}
                     members={members}
@@ -836,12 +860,12 @@ export function ProjectWorkView({
                           const isChildExpanded = expandedGroups.has(child.id);
 
                           return (
-                            <div key={child.id} id={`task-${child.id}`} className={`relative transition-all duration-300 ${idx > 0 ? 'mt-3' : ''}`}>
+                            <div key={child.id} id={`task - ${child.id} `} className={`relative transition - all duration - 300 ${idx > 0 ? 'mt-3' : ''} `}>
                               <div
                                 className="absolute left-0 top-0 bottom-0 border-l-2 border-muted"
-                                style={{ marginLeft: `${(level - 1) * 1.5}rem` }}
+                                style={{ marginLeft: `${(level - 1) * 1.5} rem` }}
                               />
-                              <div style={{ marginLeft: `${level * 1.5}rem` }} className="relative">
+                              <div style={{ marginLeft: `${level * 1.5} rem` }} className="relative">
                                 <div className="absolute left-0 top-1/2 w-4 border-t-2 border-muted" style={{ marginLeft: '-1.5rem' }} />
                                 <DraggableWBSCard
                                   item={child}

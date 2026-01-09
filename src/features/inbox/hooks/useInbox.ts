@@ -172,6 +172,8 @@ export const useInbox = () => {
             }
 
             updates.status = newStatus;
+            updates.type = item.type; // Persist type changes (e.g. todo -> action)
+            updates.parent_id = item.parent_id; // Persist parent selection
             if (artifactId) updates.source_artifact_id = artifactId;
 
             // 3. Update Item
