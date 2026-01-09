@@ -75,6 +75,7 @@ export function SourcesPage() {
   const [isPruneConfirmOpen, setIsPruneConfirmOpen] = useState(false);
   const [isRemoveDupConfirmOpen, setIsRemoveDupConfirmOpen] = useState(false);
   const [isRemovingDuplicates, setIsRemovingDuplicates] = useState(false);
+  const [isGhostCleanupConfirmOpen, setIsGhostCleanupConfirmOpen] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -142,9 +143,12 @@ export function SourcesPage() {
     }
   };
 
-  const handleGhostCleanup = async () => {
-    if (!confirm('確定要執行幽靈任務清理嗎？\n這將刪除特定的 3 個已知殘留任務。')) return;
+  const handleGhostCleanup = () => {
+    setIsGhostCleanupConfirmOpen(true);
+  };
 
+  const executeGhostCleanup = async () => {
+    setIsGhostCleanupConfirmOpen(false);
     setIsCleaning(true);
     const storage = getStorageClient();
     const ghostTitles = [
@@ -615,6 +619,33 @@ export function SourcesPage() {
 
 
   // ...
+
+      <AlertDialog open={isGhostCleanupConfirmOpen} onOpenChange={setIsGhostCleanupConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要執行幽靈任務清理嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              這是一個<strong>臨時修復操作</strong>，用於刪除特定的殘留任務。
+              <br /><br />
+              將會嘗試搜尋並刪除以下標題的任務：
+              <ul className="list-disc pl-5 mt-2 space-y-1">
+                <li>CR: 權利盤點作業...</li>
+                <li>CR: 新增審議會議管理...</li>
+                <li>決議內容：前台網站視覺...</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executeGhostCleanup}
+              className="bg-purple-600 text-white hover:bg-purple-700"
+            >
+              執行清理
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create Dialog */}
       <CreateSourceDialog
