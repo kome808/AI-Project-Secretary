@@ -145,13 +145,8 @@ export function SourceDetailPage() {
     };
 
     const handleNavigateToItem = (item: Item) => {
-        let view = 'actions';
-        // if (item.type === 'work_package') view = 'work'; // Removed invalid type check
-        if (item.type === 'pending') view = 'pending';
-        else if (item.type === 'cr') view = 'cr';
-        else if (item.type === 'decision') view = 'decisions';
-
-        navigate(`/tasks?view=${view}`);
+        // Navigate directly to task detail page
+        navigate(`/app/tasks/${item.id}`);
     };
 
     if (loading) {
