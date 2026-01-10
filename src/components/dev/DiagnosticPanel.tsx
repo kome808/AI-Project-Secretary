@@ -18,31 +18,37 @@ export function DiagnosticPanel() {
     setChecking(true);
     const diagnostics: DiagnosticResult[] = [];
 
-    // 檢查 1: Supabase URL
-    const supabaseUrl = localStorage.getItem('supabase_url');
+    // 檢查 1: Supabase URL（優先環境變數，其次 localStorage）
+    const supabaseUrlEnv = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseUrlLocal = localStorage.getItem('supabase_url');
+    const supabaseUrl = supabaseUrlEnv || supabaseUrlLocal;
+
     if (supabaseUrl) {
       diagnostics.push({
         name: 'Supabase URL',
         status: 'success',
-        message: '已設定',
-        details: supabaseUrl.substring(0, 30) + '...',
+        message: supabaseUrlEnv ? '已設定（環境變數）' : '已設定（localStorage）',
+        details: supabaseUrl.substring(0, 40) + '...',
       });
     } else {
       diagnostics.push({
         name: 'Supabase URL',
         status: 'error',
         message: '未設定',
-        details: 'localStorage 中找不到 supabase_url',
+        details: '請設定環境變數 VITE_SUPABASE_URL 或 localStorage',
       });
     }
 
-    // 檢查 2: Supabase Anon Key
-    const supabaseKey = localStorage.getItem('supabase_anon_key');
+    // 檢查 2: Supabase Anon Key（優先環境變數，其次 localStorage）
+    const supabaseKeyEnv = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseKeyLocal = localStorage.getItem('supabase_anon_key');
+    const supabaseKey = supabaseKeyEnv || supabaseKeyLocal;
+
     if (supabaseKey) {
       diagnostics.push({
         name: 'Supabase Anon Key',
         status: 'success',
-        message: '已設定',
+        message: supabaseKeyEnv ? '已設定（環境變數）' : '已設定（localStorage）',
         details: supabaseKey.substring(0, 10) + '...' + supabaseKey.substring(supabaseKey.length - 10),
       });
     } else {
@@ -50,9 +56,10 @@ export function DiagnosticPanel() {
         name: 'Supabase Anon Key',
         status: 'error',
         message: '未設定',
-        details: 'localStorage 中找不到 supabase_anon_key',
+        details: '請設定環境變數 VITE_SUPABASE_ANON_KEY 或 localStorage',
       });
     }
+
 
     // 檢查 3: Schema Name
     const schemaName = localStorage.getItem('supabase_schema');
